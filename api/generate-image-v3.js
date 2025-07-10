@@ -31,16 +31,21 @@ exports.handler = async (event) => {
       body: JSON.stringify({ imageUrl }),
     };
   } catch (err) {
-  console.error("❌ OpenAI ERROR:", JSON.stringify(err, null, 2));
+  console.error("❌ OpenAI ERROR:", err);
 
-  const fallbackError =
-    err?.response?.data?.error?.message ||
-    err?.message ||
-    "Unknown server error";
+  const fallback = {
+    error:
+      (err?.response?.data && typeof err.response.data === "string"
+        ? err.response.data
+        : err?.response?.data?.error?.message) ||
+      err?.message ||
+      "Unknown error",
+  };
 
   return {
     statusCode: 500,
-    body: JSON.stringify({ error: fallbackError }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fallback),
   };
 }
 };
