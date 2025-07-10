@@ -24,28 +24,29 @@ exports.handler = async (event) => {
       response_format: "url",
     });
 
-    const imageUrl = response.data.data[0].url; // 👈 to było źle w Twojej wersji
+    const imageUrl = response.data[0].url;
 
     return {
       statusCode: 200,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imageUrl }),
     };
   } catch (err) {
-  console.error("❌ OpenAI ERROR:", err);
+    console.error("❌ OpenAI ERROR:", err);
 
-  const fallback = {
-    error:
-      (err?.response?.data && typeof err.response.data === "string"
-        ? err.response.data
-        : err?.response?.data?.error?.message) ||
-      err?.message ||
-      "Unknown error",
-  };
+    const fallback = {
+      error:
+        (err?.response?.data && typeof err.response.data === "string"
+          ? err.response.data
+          : err?.response?.data?.error?.message) ||
+        err?.message ||
+        "Unknown error",
+    };
 
-  return {
-    statusCode: 500,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(fallback),
-  };
-}
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fallback),
+    };
+  }
 };
