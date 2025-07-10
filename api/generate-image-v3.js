@@ -24,7 +24,7 @@ exports.handler = async (event) => {
       response_format: "url",
     });
 
-    const imageUrl = response.data[0].url;
+    const imageUrl = response.data.data[0].url; // 👈 to było źle w Twojej wersji
 
     return {
       statusCode: 200,
