@@ -16,15 +16,37 @@ exports.handler = async (event) => {
       };
     }
 
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt,
-      n: 1,
-      size: "1024x1024",
-      response_format: "url",
+    const response = await openai.chat.completions.create({
+      model: "gpt-4-vision-preview", // lub "gpt-4o" gdy chcesz szybciej/ekonomiczniej
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+          ],
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "generate_image",
+            parameters: {
+              prompt,
+              size: "1024x1024",
+              n: 1,
+              response_format: "url",
+            },
+          },
+        },
+      ],
+      tool_choice: {
+        type: "function",
+        function: { name: "generate_image" },
+      },
     });
 
-    const imageUrl = response.data[0].url;
+    const imageUrl = response.choices[0].message.tool_calls[0].function.arguments.url;
 
     return {
       statusCode: 200,
@@ -33,20 +55,15 @@ exports.handler = async (event) => {
     };
   } catch (err) {
     console.error("❌ OpenAI ERROR:", err);
-
-    const fallback = {
-      error:
-        (err?.response?.data && typeof err.response.data === "string"
-          ? err.response.data
-          : err?.response?.data?.error?.message) ||
-        err?.message ||
-        "Unknown error",
-    };
-
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fallback),
+      body: JSON.stringify({
+        error:
+          (err?.response?.data?.error?.message ||
+            err?.message ||
+            "Unknown server error"),
+      }),
     };
   }
 };
