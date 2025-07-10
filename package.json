@@ -1,0 +1,8 @@
+{
+  "name": "ai-generator-vercel",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "openai": "^5.7.0"
+  }
+}

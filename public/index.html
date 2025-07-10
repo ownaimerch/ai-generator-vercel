@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Generator Obrazów AI</title>
+</head>
+<body>
+  <h1>Wygeneruj Obraz</h1>
+  <textarea id="prompt" placeholder="Wpisz opis obrazka"></textarea>
+  <button onclick="generateImage()">Generuj</button>
+  <p id="status"></p>
+  <div id="result"></div>
+
+  <script>
+    async function generateImage() {
+      const prompt = document.getElementById("prompt").value;
+      const status = document.getElementById("status");
+      const result = document.getElementById("result");
+      status.textContent = "Generowanie...";
+      result.innerHTML = "";
+
+      try {
+        const res = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt })
+        });
+
+        const data = await res.json();
+
+        if (data.imageUrl) {
+          result.innerHTML = `<img src="${data.imageUrl}" alt="AI image" style="max-width: 100%;">`;
+          status.textContent = "";
+        } else {
+          status.textContent = "❌ Błąd: " + data.error;
+        }
+      } catch (err) {
+        status.textContent = "❌ Błąd sieci: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
