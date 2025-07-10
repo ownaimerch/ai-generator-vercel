@@ -31,12 +31,12 @@ exports.handler = async (event) => {
       body: JSON.stringify({ imageUrl }),
     };
   } catch (err) {
-    console.error("❌ OpenAI ERROR:", err?.response?.data || err.message || err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: err?.response?.data || err.message || "Unknown error",
-      }),
-    };
-  }
+  console.error("❌ OpenAI ERROR:", err);
+  return {
+    statusCode: 500,
+    body: JSON.stringify({
+      error: err?.message || "Unknown server error",
+    }),
+  };
+}
 };
