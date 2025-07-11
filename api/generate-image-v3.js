@@ -1,13 +1,10 @@
 const { OpenAI } = require("openai");
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 exports.handler = async (event) => {
   try {
-    const body = JSON.parse(event.body);
-    const prompt = body.prompt;
+    const { prompt } = JSON.parse(event.body || "{}");
 
     if (!prompt || prompt.trim().length < 3) {
       return {
@@ -16,15 +13,15 @@ exports.handler = async (event) => {
       };
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4-vision-preview",
+    const chatCompletion = await openai.chat.completions.create({
+      model: "gpt-4-1106-vision-preview",
       messages: [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `Create a DALL·E 3 image: ${prompt}`,
+              text: `Create an image based on this prompt: ${prompt}`,
             },
           ],
         },
@@ -34,39 +31,51 @@ exports.handler = async (event) => {
           type: "function",
           function: {
             name: "generate_image",
+            description: "Generate an image using DALL·E 3",
             parameters: {
-              prompt,
-              size: "1024x1024",
-              n: 1,
+              type: "object",
+              properties: {
+                prompt: { type: "string", description: "Image description" },
+              },
+              required: ["prompt"],
             },
           },
         },
       ],
-      tool_choice: { type: "function", function: { name: "generate_image" } },
+      tool_choice: {
+        type: "function",
+        function: { name: "generate_image" },
+      },
     });
 
-    const imageUrl = response.choices[0]?.message?.tool_calls?.[0]?.function?.arguments?.url;
-
-    if (!imageUrl) {
-      throw new Error("No image URL returned.");
+    const toolCall = chatCompletion.choices[0].message.tool_calls?.[0];
+    if (!toolCall || !toolCall.function.arguments) {
+      throw new Error("No tool function call was returned");
     }
+
+    const toolArgs = JSON.parse(toolCall.function.arguments);
+    const imagePrompt = toolArgs.prompt;
+
+    const imageResponse = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: imagePrompt,
+      n: 1,
+      size: "1024x1024",
+      response_format: "url",
+    });
+
+    const imageUrl = imageResponse.data[0].url;
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imageUrl }),
     };
   } catch (err) {
-    console.error("❌ OpenAI ERROR:", err);
-
+    console.error("❌ Server Error:", err);
     return {
       statusCode: 500,
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        error:
-          err?.response?.data?.error?.message ||
-          err?.message ||
-          "Unknown error",
+        error: err.message || "Unexpected error",
       }),
     };
   }
