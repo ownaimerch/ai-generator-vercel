@@ -6,8 +6,7 @@ const openai = new OpenAI({
 
 exports.handler = async (event) => {
   try {
-    const body = JSON.parse(event.body);
-    const prompt = body.prompt;
+    const { prompt } = JSON.parse(event.body);
 
     if (!prompt || prompt.trim().length < 3) {
       return {
@@ -16,37 +15,15 @@ exports.handler = async (event) => {
       };
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4-vision-preview", // lub "gpt-4o" gdy chcesz szybciej/ekonomiczniej
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-          ],
-        },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "generate_image",
-            parameters: {
-              prompt,
-              size: "1024x1024",
-              n: 1,
-              response_format: "url",
-            },
-          },
-        },
-      ],
-      tool_choice: {
-        type: "function",
-        function: { name: "generate_image" },
-      },
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt,
+      n: 1,
+      size: "1024x1024",
+      response_format: "url",
     });
 
-    const imageUrl = response.choices[0].message.tool_calls[0].function.arguments.url;
+    const imageUrl = response.data[0].url; // <-- poprawna struktura
 
     return {
       statusCode: 200,
@@ -55,14 +32,15 @@ exports.handler = async (event) => {
     };
   } catch (err) {
     console.error("❌ OpenAI ERROR:", err);
+
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         error:
-          (err?.response?.data?.error?.message ||
-            err?.message ||
-            "Unknown server error"),
+          err?.response?.data?.error?.message ||
+          err?.message ||
+          "Unknown error",
       }),
     };
   }
