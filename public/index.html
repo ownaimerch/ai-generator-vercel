@@ -11,33 +11,37 @@
   <p id="status"></p>
   <div id="result"></div>
 
-  <script>
-    async function generateImage() {
-      const prompt = document.getElementById("prompt").value;
-      const status = document.getElementById("status");
-      const result = document.getElementById("result");
-      status.textContent = "Generating image with DALL·E 3... This may take a few seconds.";
-      result.innerHTML = "";
+<script>
+  async function generateImage() {
+    const promptInput = document.getElementById("prompt").value;
 
-      try {
-        const res = await fetch("/api/generate-image-v3", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt })
-        });
-
-        const data = await res.json();
-
-        if (data.imageUrl) {
-          result.innerHTML = `<img src="${data.imageUrl}" alt="AI image" style="max-width: 100%;">`;
-          status.textContent = "";
-        } else {
-          status.textContent = "❌ Error: " + data.error;
-        }
-      } catch (err) {
-        status.textContent = "❌ Network error: " + err.message;
-      }
+    if (!promptInput) {
+      alert("Wpisz prompt!");
+      return;
     }
-  </script>
+
+    try {
+      const res = await fetch('https://ai-generator-vercel.vercel.app/api/generate-image-v3', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prompt: promptInput })
+      });
+
+      const data = await res.json();
+      console.log("✅ Odpowiedź z API:", data);
+
+      if (data.image_url) {
+        document.getElementById("result").src = data.image_url;
+      } else {
+        alert("Brak URL obrazka");
+      }
+    } catch (err) {
+      console.error("❌ Błąd wywołania API:", err);
+      alert("Wystąpił błąd.");
+    }
+  }
+ </script>
 </body>
 </html>
