@@ -104,6 +104,16 @@
           status.textContent = "❌ No image returned.";
           return;
         }
+        const mainImage = document.querySelector(".product__media img");
+
+        if (mainImage) {
+          mainImage.src = data.imageUrl;
+          status.textContent = "✅ Mockup zaktualizowany!";
+      } else {
+          console.warn("❌ Nie znaleziono głównego zdjęcia produktu.");
+          status.textContent = "❌ Nie udało się zaktualizować mockupu.";
+      }
+
 
         result.src = data.imageUrl;
         status.textContent = "✅ Image generated. Creating mockup...";
