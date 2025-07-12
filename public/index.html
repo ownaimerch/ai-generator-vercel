@@ -1,47 +1,51 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>AI Image Generator (DALL·E 3)</title>
-</head>
-<body>
-  <h1>Generate an AI Image</h1>
-  <textarea id="prompt" placeholder="Enter your image description here..."></textarea>
-  <button onclick="generateImage()">Generate</button>
-  <p id="status"></p>
-  <div id="result"></div>
+const { OpenAI } = require("openai");
 
-<script>
-  async function generateImage() {
-    const promptInput = document.getElementById("prompt").value;
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-    if (!promptInput) {
-      alert("Wpisz prompt!");
-      return;
+exports.handler = async (event) => {
+  try {
+    console.log("🔍 Incoming request:", event.body);
+    const body = JSON.parse(event.body);
+    const prompt = body.prompt;
+
+    if (!prompt || prompt.trim().length < 3) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Prompt too short." }),
+      };
     }
 
-    try {
-      const res = await fetch('https://ai-generator-vercel.vercel.app/api/generate-image-v3', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ prompt: promptInput })
-      });
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt,
+      n: 1,
+      size: "1024x1024",
+      response_format: "url",
+    });
 
-      const data = await res.json();
-      console.log("✅ Odpowiedź z API:", data);
+    const imageUrl = response.data[0].url;
 
-      if (data.image_url) {
-        document.getElementById("result").src = data.image_url;
-      } else {
-        alert("Brak URL obrazka");
-      }
-    } catch (err) {
-      console.error("❌ Błąd wywołania API:", err);
-      alert("Wystąpił błąd.");
-    }
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageUrl }),
+    };
+  } catch (err) {
+    console.error("❌ OpenAI ERROR:", err);
+    const fallback = {
+      error:
+        (err?.response?.data && typeof err.response.data === "string"
+          ? err.response.data
+          : err?.response?.data?.error?.message) ||
+        err?.message ||
+        "Unknown error",
+    };
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fallback),
+    };
   }
- </script>
-</body>
-</html>
+};
