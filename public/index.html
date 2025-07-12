@@ -53,8 +53,16 @@
           body: JSON.stringify({ prompt }),
         });
 
-        const data = await res.json();
-        console.log("✅ API response:", data);
+        if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Server returned error:", errorText);
+        status.textContent = "❌ Server error. Check console for details.";
+        return;
+        }
+
+const data = await res.json();
+console.log("✅ API response:", data);
+
 
         if (data.imageUrl) {
           result.src = data.imageUrl;
