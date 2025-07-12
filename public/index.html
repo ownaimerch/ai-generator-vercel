@@ -1,51 +1,72 @@
-const { OpenAI } = require("openai");
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-exports.handler = async (event) => {
-  try {
-    console.log("🔍 Incoming request:", event.body);
-    const body = JSON.parse(event.body);
-    const prompt = body.prompt;
-
-    if (!prompt || prompt.trim().length < 3) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Prompt too short." }),
-      };
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Image Generator (DALL·E 3)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
     }
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin-bottom: 10px;
+    }
+    img {
+      max-width: 100%;
+      margin-top: 20px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>Generate an AI Image</h1>
+  <textarea id="prompt" placeholder="Enter your image description here..."></textarea>
+  <button onclick="generateImage()">Generate</button>
+  <p id="status"></p>
+  <img id="result" src="" alt="Generated image will appear here" />
 
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt,
-      n: 1,
-      size: "1024x1024",
-      response_format: "url",
-    });
+  <script>
+    async function generateImage() {
+      const prompt = document.getElementById("prompt").value.trim();
+      const status = document.getElementById("status");
+      const result = document.getElementById("result");
 
-    const imageUrl = response.data[0].url;
+      if (!prompt) {
+        alert("Please enter a prompt!");
+        return;
+      }
 
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageUrl }),
-    };
-  } catch (err) {
-    console.error("❌ OpenAI ERROR:", err);
-    const fallback = {
-      error:
-        (err?.response?.data && typeof err.response.data === "string"
-          ? err.response.data
-          : err?.response?.data?.error?.message) ||
-        err?.message ||
-        "Unknown error",
-    };
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fallback),
-    };
-  }
-};
+      status.textContent = "Generating image...";
+      result.src = "";
+
+      try {
+        const res = await fetch("/api/generate-image-v3", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prompt }),
+        });
+
+        const data = await res.json();
+        console.log("✅ API response:", data);
+
+        if (data.imageUrl) {
+          result.src = data.imageUrl;
+          status.textContent = "✅ Image generated!";
+        } else {
+          status.textContent = "❌ No image URL returned.";
+        }
+      } catch (err) {
+        console.error("❌ API error:", err);
+        status.textContent = "❌ An error occurred.";
+      }
+    }
+  </script>
+</body>
+</html>
