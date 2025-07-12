@@ -88,7 +88,10 @@
         };
 
         waitForMainImage().then((mainImage) => {
-          mainImage.src = data.imageUrl;
+          window.parent.postMessage({
+          type: "UPDATE_MOCKUP",
+          imageUrl: data.imageUrl
+        }, "*");
           status.textContent = "✅ Mockup zaktualizowany!";
         }).catch(() => {
           console.warn("❌ Nie znaleziono zdjęcia produktu.");
