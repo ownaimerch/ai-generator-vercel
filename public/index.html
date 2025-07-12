@@ -21,30 +21,48 @@
       margin-top: 20px;
       display: block;
     }
+    #mockup-section {
+      margin-top: 30px;
+    }
+    #order-button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 15px;
+    }
   </style>
 </head>
 <body>
-  <h1>Generate an AI Image</h1>
+  <h1>Generate Your Own AI T-shirt</h1>
   <textarea id="prompt" placeholder="Enter your image description here..."></textarea>
   <button onclick="generateImage()">Generate</button>
   <p id="status"></p>
-  <img id="result" src="" alt="Generated image will appear here" />
+  <img id="result" src="" alt="" />
+
+  <div id="mockup-section" style="display:none;">
+    <h2>Your T-shirt mockup:</h2>
+    <img id="mockup-image" src="" alt="Mockup will appear here" />
+    <button id="order-button">Order this T-shirt</button>
+  </div>
 
   <script>
     async function generateImage() {
       const prompt = document.getElementById("prompt").value.trim();
       const status = document.getElementById("status");
       const result = document.getElementById("result");
+      const mockupSection = document.getElementById("mockup-section");
+      const mockupImage = document.getElementById("mockup-image");
 
       if (!prompt) {
         alert("Please enter a prompt!");
         return;
       }
 
-      status.textContent = "Generating image...";
+      status.textContent = "🧠 Generating image with AI...";
       result.src = "";
+      mockupSection.style.display = "none";
 
       try {
+        // 1. Generowanie obrazu z DALL·E
         const res = await fetch("/api/generate-image-v3", {
           method: "POST",
           headers: {
@@ -54,27 +72,52 @@
         });
 
         if (!res.ok) {
-        const errorText = await res.text();
-        console.error("❌ Server returned error:", errorText);
-        status.textContent = "❌ Server error. Check console for details.";
-        return;
+          const errorText = await res.text();
+          console.error("❌ Server returned error:", errorText);
+          status.textContent = "❌ Error from image generation API.";
+          return;
         }
 
-const data = await res.json();
-console.log("✅ API response:", data);
+        const data = await res.json();
+        console.log("✅ DALL·E image response:", data);
 
+        if (!data.imageUrl) {
+          status.textContent = "❌ No image returned.";
+          return;
+        }
 
-        if (data.imageUrl) {
-          result.src = data.imageUrl;
-          status.textContent = "✅ Image generated!";
+        const imageUrl = data.imageUrl;
+        result.src = imageUrl;
+        status.textContent = "✅ Image generated. Creating mockup...";
+
+        // 2. Tworzenie produktu w Printify
+        const createRes = await fetch("/api/create-printify-product", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_url: imageUrl, prompt })
+        });
+
+        const createData = await createRes.json();
+        console.log("✅ Printify create response:", createData);
+
+        if (createData.success && createData.mockup_url) {
+          mockupImage.src = createData.mockup_url;
+          mockupSection.style.display = "block";
+          status.textContent = "✅ T-shirt mockup ready!";
         } else {
-          status.textContent = "❌ No image URL returned.";
+          status.textContent = "❌ Failed to create product mockup.";
         }
+
       } catch (err) {
-        console.error("❌ API error:", err);
-        status.textContent = "❌ An error occurred.";
+        console.error("❌ Unexpected error:", err);
+        status.textContent = "❌ Something went wrong.";
       }
     }
+
+    // Na razie tylko alert, później podłączymy do koszyka/zamówienia
+    document.getElementById("order-button").addEventListener("click", () => {
+      alert("Tutaj w przyszłości będzie formularz zamówienia lub dodanie do koszyka Shopify");
+    });
   </script>
 </body>
 </html>
