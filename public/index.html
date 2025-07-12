@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI T-shirt Generator</title>
+  <title>AI Image Generator (DALL·E 3)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -11,75 +11,30 @@
       max-width: 600px;
       margin: auto;
     }
-    textarea, input, select, button {
+    textarea {
       width: 100%;
-      padding: 10px;
-      margin-bottom: 15px;
-      font-size: 16px;
+      height: 100px;
+      margin-bottom: 10px;
     }
     img {
       max-width: 100%;
       margin-top: 20px;
       display: block;
     }
-    #mockup-section, #order-form {
-      margin-top: 30px;
-    }
-    #form-status {
-      margin-top: 10px;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
-  <h1>Design your AI-powered T-shirt</h1>
-
-  <textarea id="prompt" placeholder="Describe your idea..."></textarea>
-  <button onclick="generateImage()">Generate Image</button>
+  <h1>Generate an AI Image</h1>
+  <textarea id="prompt" placeholder="Enter your image description here..."></textarea>
+  <button onclick="generateImage()">Generate</button>
   <p id="status"></p>
-  <img id="result" src="" alt="" />
-
-  <div id="mockup-section" style="display:none;">
-    <h2>Your T-shirt mockup</h2>
-    <img id="mockup-image" src="" alt="Mockup will appear here" />
-  </div>
-
-  <div id="order-form" style="display:none;">
-    <h2>Complete your order</h2>
-    <form id="formspree" method="POST">
-      <input type="hidden" name="image_url" id="image_url" />
-
-      <label>Full Name:
-        <input type="text" name="name" required />
-      </label>
-
-      <label>Email:
-        <input type="email" name="email" required />
-      </label>
-
-      <label>Choose Size:
-        <select name="size" required>
-          <option value="">Select size</option>
-          <option>S</option>
-          <option>M</option>
-          <option>L</option>
-          <option>XL</option>
-        </select>
-      </label>
-
-      <button type="submit">Send Order</button>
-    </form>
-    <p id="form-status"></p>
-  </div>
+  <img id="result" src="" alt="Generated image will appear here" />
 
   <script>
     async function generateImage() {
       const prompt = document.getElementById("prompt").value.trim();
       const status = document.getElementById("status");
       const result = document.getElementById("result");
-      const mockupImage = document.getElementById("mockup-image");
-      const mockupSection = document.getElementById("mockup-section");
-      const orderForm = document.getElementById("order-form");
 
       if (!prompt) {
         alert("Please enter a prompt!");
@@ -88,72 +43,63 @@
 
       status.textContent = "🧠 Generating image...";
       result.src = "";
-      mockupSection.style.display = "none";
-      orderForm.style.display = "none";
 
       try {
         const res = await fetch("/api/generate-image-v3", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt })
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prompt }),
         });
 
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("❌ Server returned error:", errorText);
+          status.textContent = "❌ Server error. Check console for details.";
+          return;
+        }
+
         const data = await res.json();
+        console.log("✅ API response:", data);
 
         if (!data.imageUrl) {
           status.textContent = "❌ No image returned.";
           return;
         }
-        const mainImage = document.querySelector(".product__media img");
 
-        if (mainImage) {
+        // Pokaż wygenerowany obraz lokalnie (pod spodem)
+        result.src = data.imageUrl;
+        status.textContent = "🧠 Image generated. Creating mockup...";
+
+        // Poczekaj aż główne zdjęcie produktu będzie dostępne w DOM
+        const waitForMainImage = () => {
+          return new Promise((resolve, reject) => {
+            const check = () => {
+              const img = document.querySelector(".product__media img");
+              if (img) {
+                resolve(img);
+              } else {
+                setTimeout(check, 100);
+              }
+            };
+            check();
+          });
+        };
+
+        waitForMainImage().then((mainImage) => {
           mainImage.src = data.imageUrl;
           status.textContent = "✅ Mockup zaktualizowany!";
-      } else {
-          console.warn("❌ Nie znaleziono głównego zdjęcia produktu.");
+        }).catch(() => {
+          console.warn("❌ Nie znaleziono zdjęcia produktu.");
           status.textContent = "❌ Nie udało się zaktualizować mockupu.";
-      }
-
-
-        result.src = data.imageUrl;
-        status.textContent = "✅ Image generated. Creating mockup...";
-
-        // zamiast Printify mockupu, używamy obrazka bezpośrednio
-        mockupImage.src = data.imageUrl;
-        mockupSection.style.display = "block";
-
-        document.getElementById("image_url").value = data.imageUrl;
-        orderForm.style.display = "block";
-
-        status.textContent = "✅ Ready to order!";
-      } catch (err) {
-        console.error(err);
-        status.textContent = "❌ Error occurred during generation.";
-      }
-    }
-
-    document.getElementById("formspree").addEventListener("submit", async function(e) {
-      e.preventDefault();
-      const form = e.target;
-      const status = document.getElementById("form-status");
-
-      try {
-        const res = await fetch("https://formspree.io/f/xovwggqk", {
-          method: "POST",
-          headers: { "Accept": "application/json" },
-          body: new FormData(form)
         });
 
-        if (res.ok) {
-          status.textContent = "✅ Order sent! We'll contact you soon.";
-          form.reset();
-        } else {
-          status.textContent = "❌ Failed to send. Try again.";
-        }
       } catch (err) {
-        status.textContent = "❌ Network error.";
+        console.error("❌ API error:", err);
+        status.textContent = "❌ An error occurred.";
       }
-    });
+    }
   </script>
 </body>
 </html>
