@@ -70,34 +70,15 @@
 
         // Pokaż wygenerowany obraz lokalnie (pod spodem)
         result.src = data.imageUrl;
-        status.textContent = "🧠 Image generated. Creating mockup...";
+        status.textContent = "🧠 Image generated. Sending to Shopify...";
 
-        // Poczekaj aż główne zdjęcie produktu będzie dostępne w DOM
-        const waitForMainImage = () => {
-          return new Promise((resolve, reject) => {
-            const check = () => {
-              const img = document.querySelector(".product__media img");
-              if (img) {
-                resolve(img);
-              } else {
-                setTimeout(check, 100);
-              }
-            };
-            check();
-          });
-        };
-
-        waitForMainImage().then((mainImage) => {
-          window.parent.postMessage({
+        // Wyślij mockup do strony Shopify
+        window.parent.postMessage({
           type: "UPDATE_MOCKUP",
           imageUrl: data.imageUrl
         }, "*");
-          status.textContent = "✅ Mockup zaktualizowany!";
-        }).catch(() => {
-          console.warn("❌ Nie znaleziono zdjęcia produktu.");
-          status.textContent = "❌ Nie udało się zaktualizować mockupu.";
-        });
 
+        status.textContent = "✅ Mockup wysłany!";
       } catch (err) {
         console.error("❌ API error:", err);
         status.textContent = "❌ An error occurred.";
