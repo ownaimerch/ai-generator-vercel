@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
     // Generowanie obrazu (base64 — najprościej wyświetlić na froncie)
     const resp = await openai.images.generate({
-      model: "gpt-image-1",   // możesz zmienić na "dall-e-3"
+      model: "dall-e-3",   // możesz zmienić na "dall-e-3"
       prompt,
       size: "1024x1024",
     });
