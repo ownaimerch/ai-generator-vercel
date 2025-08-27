@@ -1,22 +1,24 @@
+// api/generate-image-v3.js
 import { OpenAI } from "openai";
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ← DODAJ: listę dozwolonych originów (z https://)
+// domeny sklepu (klienci). ZAWSZE z https://
 const ALLOWED_ORIGINS = [
   "https://ownaimerch.com",
+  "https://www.ownaimerch.com",
   "https://own-ai-merch.myshopify.com",
   "https://rjdmq-q4.myshopify.com",
-  "https://www.ownaimerch.com"
 ];
 
-// Pozwól na lokalne testy: Origin bywa "null" dla file://
 function corsHeaders(origin = "") {
+  // pozwól na lokalny plik testowy (Origin: null)
   if (!origin || origin === "null") {
     return {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400",
+      "Vary": "Origin",
     };
   }
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -24,57 +26,43 @@ function corsHeaders(origin = "") {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
   };
 }
 
-
 export default async function handler(req, res) {
   const origin = req.headers.origin || "";
-  const cors = corsHeaders(origin);
+  const h = corsHeaders(origin);
+  Object.entries(h).forEach(([k, v]) => res.setHeader(k, v));
 
-  // ZAWSZE doklej nagłówki CORS do odpowiedzi
-  Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
-
-  // Preflight z przeglądarki
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    // Jeżeli front wysyła application/json, Vercel zwykle daje tu już obiekt
-    // (gdyby było undefined, użyj: const { prompt } = JSON.parse(req.body || "{}");
-    const { prompt } = req.body || {};
-
-    if (!prompt || prompt.trim().length < 3) {
-      return res.status(400).json({ error: "Prompt too short." });
+    // bezpieczne parsowanie body (czasem jest string)
+    let body = req.body;
+    if (typeof body === "string") {
+      try { body = JSON.parse(body || "{}"); } catch { body = {}; }
     }
+    const prompt = (body?.prompt || "").trim();
+    if (prompt.length < 3) return res.status(400).json({ error: "Prompt too short." });
 
-    // --- Generowanie obrazu ---
-    // Masz „dall-e-3” + response_format:url — ok, jeśli działa.
-    // Rekomendacja SDK 5.x: model "gpt-image-1" i odbiór base64 (stabilniej).
-    const response = await openai.images.generate({
-      model: "dall-e-3",        // ewentualnie: "gpt-image-1"
+    // Generacja obrazu (stabilnie na base64)
+    const resp = await openai.images.generate({
+      model: "gpt-image-1",          // możesz zamienić na "dall-e-3"
       prompt,
-      n: 1,
       size: "1024x1024",
-      response_format: "url",   // ewentualnie usuń i odbieraj base64 (b64_json)
     });
 
-    // URL wariant:
-    const imageUrl = response.data[0].url;
+    const b64 = resp?.data?.[0]?.b64_json;
+    if (!b64) return res.status(500).json({ error: "No image returned" });
 
-    return res.status(200).json({ imageUrl });
+    return res.status(200).json({ base64: `data:image/png;base64,${b64}` });
   } catch (err) {
-    console.error("❌ OpenAI error:", err);
+    console.error("❌ generate-image error:", err);
     return res.status(500).json({
-      error:
-        err?.response?.data?.error?.message ||
-        err?.message ||
-        "Unknown error",
+      error: err?.response?.data?.error?.message || err?.message || "Unknown error",
     });
   }
 }
