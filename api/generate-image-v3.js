@@ -4,14 +4,21 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ← DODAJ: listę dozwolonych originów (z https://)
 const ALLOWED_ORIGINS = [
-  "ownaimerch.com",
-  "own-ai-merch.myshopify.com",
-  "rjd1mq-q4.myshopify.com",
-  "www.ownaimerch.com"
+  "https://ownaimerch.com",
+  "https://own-ai-merch.myshopify.com",
+  "https://rjdmq-q4.myshopify.com",
+  "https://www.ownaimerch.com"
 ];
 
-// pomocnicze nagłówki CORS
+// Pozwól na lokalne testy: Origin bywa "null" dla file://
 function corsHeaders(origin = "") {
+  if (!origin || origin === "null") {
+    return {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+  }
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allow,
@@ -19,6 +26,7 @@ function corsHeaders(origin = "") {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
+
 
 export default async function handler(req, res) {
   const origin = req.headers.origin || "";
