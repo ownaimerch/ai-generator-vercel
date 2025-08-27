@@ -1,43 +1,41 @@
+// api/generate-image-v3.js
 import OpenAI from "openai";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req, res) {
-  // Twarde CORS na czas testu – pozwól wszystkim
+  // CORS – na czas testów otwarte
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Max-Age", "86400");
-
   if (req.method === "OPTIONS") return res.status(204).end();
 
-  // Prosty sanity-check
+  // GET bez prompta — sanity check
   if (req.method === "GET" && !req.url.includes("prompt=")) {
     return res.status(200).json({ ok: true, note: "GET ok – użyj ?prompt=..." });
   }
 
   try {
-    // 1) Pobierz prompt z GET (?prompt=...)
-    let prompt =
-      new URL(req.url, "http://x").searchParams.get("prompt") || "";
+    // prompt z GET
+    let prompt = new URL(req.url, "http://x").searchParams.get("prompt") || "";
 
-    // 2) Albo z POST (body może być JSON albo text/plain)
+    // prompt z POST (obsłuży application/json i text/plain)
     if (!prompt && req.method === "POST") {
       let body = req.body;
-      if (typeof body === "string") {
-        try { body = JSON.parse(body || "{}"); } catch { body = {}; }
-      }
+      if (typeof body === "string") { try { body = JSON.parse(body || "{}"); } catch { body = {}; } }
       prompt = (body?.prompt || "").trim();
     }
 
-    if (!prompt || prompt.trim().length < 3) {
+    if (!prompt || prompt.length < 3) {
       return res.status(400).json({ error: "Prompt too short." });
     }
 
-    // Generowanie obrazu (base64 — najprościej wyświetlić na froncie)
+    // DALL·E 3 → base64 (bez url)
     const resp = await openai.images.generate({
-      model: "dall-e-3",   // możesz zmienić na "dall-e-3"
+      model: "dall-e-3",
       prompt,
       size: "1024x1024",
+      response_format: "b64_json",
     });
 
     const b64 = resp?.data?.[0]?.b64_json;
