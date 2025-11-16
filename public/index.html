@@ -61,22 +61,26 @@
         }
 
         const data = await res.json();
-        console.log("✅ API response:", data);
+console.log("✅ API response:", data);
 
-        if (!data.imageUrl) {
-          status.textContent = "❌ No image returned.";
-          return;
-        }
+if (!data.base64) {
+  status.textContent = "❌ No image returned.";
+  return;
+}
 
-        // Pokaż wygenerowany obraz lokalnie (pod spodem)
-        result.src = data.imageUrl;
-        status.textContent = "🧠 Image generated. Sending to Shopify...";
+// podgląd (data URL)
+const dataUrl = `data:image/png;base64,${data.base64}`;
+result.src = dataUrl;
+status.textContent = "🧠 Image generated. Sending to Shopify...";
 
-        // Wyślij mockup do strony Shopify
-        window.parent.postMessage({
-          type: "UPDATE_MOCKUP",
-          imageUrl: data.imageUrl
-        }, "*");
+window.parent.postMessage(
+  {
+    type: "UPDATE_MOCKUP",
+    imageUrl: dataUrl,  // Shopify dostaje data URL, dla mockupu OK
+  },
+  "*"
+);
+
 
         status.textContent = "✅ Mockup wysłany!";
       } catch (err) {
