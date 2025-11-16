@@ -1,5 +1,6 @@
 // api/generate-image-v3.js
 import OpenAI from "openai";
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req, res) {
@@ -22,7 +23,9 @@ export default async function handler(req, res) {
     // prompt z POST (obsłuży application/json i text/plain)
     if (!prompt && req.method === "POST") {
       let body = req.body;
-      if (typeof body === "string") { try { body = JSON.parse(body || "{}"); } catch { body = {}; } }
+      if (typeof body === "string") {
+        try { body = JSON.parse(body || "{}"); } catch { body = {}; }
+      }
       prompt = (body?.prompt || "").trim();
     }
 
@@ -30,12 +33,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Prompt too short." });
     }
 
-       const resp = await openai.images.generate({
+    // 🔴 TU BYŁ PROBLEM – wcześniej było response_format: "b64_json"
+    const resp = await openai.images.generate({
       model: "dall-e-3",
       prompt,
       size: "1024x1024",
-      n: 1,              // dla jasności
-      // UWAGA: bez response_format
+      n: 1,
+      // bez response_format → dostajemy normalny URL
     });
 
     const imageUrl = resp?.data?.[0]?.url;
@@ -43,12 +47,15 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No image URL returned" });
     }
 
+    // FRONT JUŻ NA TO CZEKA
     return res.status(200).json({ imageUrl });
-
   } catch (err) {
     console.error("❌ generate-image error:", err);
     return res.status(500).json({
-      error: err?.response?.data?.error?.message || err?.message || "Unknown error",
+      error:
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        "Unknown error",
     });
   }
 }
