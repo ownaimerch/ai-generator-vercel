@@ -30,18 +30,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Prompt too short." });
     }
 
-    // DALL·E 3 → base64 (bez url)
-    const resp = await openai.images.generate({
+       const resp = await openai.images.generate({
       model: "dall-e-3",
       prompt,
       size: "1024x1024",
-      response_format: "b64_json",
+      n: 1,              // dla jasności
+      // UWAGA: bez response_format
     });
 
-    const b64 = resp?.data?.[0]?.b64_json;
-    if (!b64) return res.status(500).json({ error: "No image returned" });
+    const imageUrl = resp?.data?.[0]?.url;
+    if (!imageUrl) {
+      return res.status(500).json({ error: "No image URL returned" });
+    }
 
-    return res.status(200).json({ base64: `data:image/png;base64,${b64}` });
+    return res.status(200).json({ imageUrl });
+
   } catch (err) {
     console.error("❌ generate-image error:", err);
     return res.status(500).json({
