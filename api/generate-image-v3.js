@@ -4,7 +4,7 @@ import OpenAI from "openai";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Używamy Printify PAT – tego samego, którego używasz w PowerShellu
-const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY;
+const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 
 export default async function handler(req, res) {
   // Prosty CORS – jak miałeś wcześniej
