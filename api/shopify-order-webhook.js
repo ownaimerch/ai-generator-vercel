@@ -1,7 +1,7 @@
 // api/shopify-order-webhook.js
 
-const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY;
-const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID;
+const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
+const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID; // to jest OK
 
 // Możesz później przenieść to do env,
 // na razie zostawiamy „na sztywno” – to wartości z Twoich testów
