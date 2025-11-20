@@ -102,7 +102,7 @@ export default async function handler(req, res) {
         };
 
     aiLineItems.push({
-      print_provider_id: PRINTIFY_PROVIDER_ID,
+      print_provider_id: PRINT_PROVIDER_ID, // TU BYŁ BŁĄD
       blueprint_id: BLUEPRINT_ID,
       variant_id: variantId,
       quantity: item.quantity || 1,
