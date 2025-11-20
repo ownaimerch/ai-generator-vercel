@@ -46,34 +46,38 @@ export default async function handler(req, res) {
 
   const aiLineItems = [];
 
-  for (const item of order.line_items || []) {
-    const props = {};
-    for (const p of item.properties || []) {
-      if (p.name && p.value) props[p.name] = p.value;
-    }
-
-    // interesują nas tylko te, które mają nasze pola
-    if (!props.ai_id || !props.ai_image_url) continue;
-
-    aiLineItems.push({
-      print_provider_id: PRINT_PROVIDER_ID,
-      blueprint_id: BLUEPRINT_ID,
-      variant_id: VARIANT_ID,
-      quantity: item.quantity || 1,
-      external_id: props.ai_id,
-      print_areas: {
-        front: [
-          {
-            src: props.ai_image_url,
-            scale: 0.55,
-            x: 0.5,
-            y: 0.42,
-            angle: 0,
-          },
-        ],
-      },
-    });
+for (const item of order.line_items || []) {
+  const props = {};
+  for (const p of item.properties || []) {
+    if (p.name && p.value) props[p.name] = p.value;
   }
+
+  if (!props.ai_id || !props.ai_image_url) continue;
+
+  // klucz wariantu – to co Shopify wysyła jako "White / S" itd.
+  const variantKey = (item.variant_title || "").trim();
+  const variantId = VARIANT_MAP[variantKey] || DEFAULT_VARIANT_ID;
+
+  aiLineItems.push({
+    print_provider_id: PRINT_PROVIDER_ID,
+    blueprint_id: BLUEPRINT_ID,
+    variant_id: variantId,
+    quantity: item.quantity || 1,
+    external_id: props.ai_id,
+    print_areas: {
+      front: [
+        {
+          src: props.ai_image_url,
+          scale: 0.55,
+          x: 0.5,
+          y: 0.42,
+          angle: 0,
+        },
+      ],
+    },
+  });
+}
+
 
   if (!aiLineItems.length) {
     console.log("No AI items in this order – nothing to send to Printify.");
