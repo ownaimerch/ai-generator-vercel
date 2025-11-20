@@ -1,5 +1,4 @@
-const AI_FRONT_PRODUCT_ID = process.env.AI_FRONT_PRODUCT_ID || "";
-const AI_BACK_PRODUCT_ID  = process.env.AI_BACK_PRODUCT_ID  || "";
+// api/shopify-order-webhook.js
 
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID;
@@ -23,6 +22,7 @@ const VARIANT_MAP = {
   "Black / XL": 73208,
 };
 
+// ID produktów w Shopify – do rozróżnienia front / back
 const AI_FRONT_PRODUCT_ID = process.env.AI_FRONT_PRODUCT_ID || "";
 const AI_BACK_PRODUCT_ID  = process.env.AI_BACK_PRODUCT_ID  || "";
 
@@ -52,61 +52,72 @@ export default async function handler(req, res) {
 
   const aiLineItems = [];
 
-for (const item of order.line_items || []) {
-  const props = {};
-  for (const p of item.properties || []) {
-    if (p.name && p.value) props[p.name] = p.value;
+  // --- BUDUJEMY LINE ITEMS DLA PRINTIFY ---
+  for (const item of order.line_items || []) {
+    // Zbierz properties (ai_id, ai_image_url, ai_prompt...)
+    const props = {};
+    for (const p of item.properties || []) {
+      if (p.name && p.value) {
+        props[p.name] = p.value;
+      }
+    }
+
+    // interesują nas tylko nasze AI-koszulki
+    if (!props.ai_id || !props.ai_image_url) {
+      continue;
+    }
+
+    // Wariant po tytule, np. "White / S"
+    const variantKey = (item.variant_title || "").trim();
+    const variantId = VARIANT_MAP[variantKey] || DEFAULT_VARIANT_ID;
+
+    // FRONT vs BACK – po product_id z Shopify
+    const productIdStr = String(item.product_id || "");
+    const isBackProduct =
+      AI_BACK_PRODUCT_ID &&
+      productIdStr === String(AI_BACK_PRODUCT_ID);
+
+    const printAreas = isBackProduct
+      ? {
+          back: [
+            {
+              src: props.ai_image_url,
+              scale: 0.55,
+              x: 0.5,
+              y: 0.42,
+              angle: 0,
+            },
+          ],
+        }
+      : {
+          front: [
+            {
+              src: props.ai_image_url,
+              scale: 0.55,
+              x: 0.5,
+              y: 0.42,
+              angle: 0,
+            },
+          ],
+        };
+
+    aiLineItems.push({
+      print_provider_id: PRINTIFY_PROVIDER_ID,
+      blueprint_id: BLUEPRINT_ID,
+      variant_id: variantId,
+      quantity: item.quantity || 1,
+      external_id: props.ai_id,
+      print_areas: printAreas,
+    });
   }
 
-  if (!props.ai_id || !props.ai_image_url) continue;
-
-   const variantKey = (item.variant_title || "").trim();
-  const variantId = VARIANT_MAP[variantKey] || DEFAULT_VARIANT_ID;
-
-  // front vs back na podstawie product_id z Shopify
-  const productIdStr = String(item.product_id || "");
-  const isBackProduct =
-    AI_BACK_PRODUCT_ID && productIdStr === String(AI_BACK_PRODUCT_ID);
-
-  const printAreas = isBackProduct
-    ? {
-        back: [
-          {
-            src: props.ai_image_url,
-            scale: 0.55,
-            x: 0.5,
-            y: 0.42,
-            angle: 0,
-          },
-        ],
-      }
-    : {
-        front: [
-          {
-            src: props.ai_image_url,
-            scale: 0.55,
-            x: 0.5,
-            y: 0.42,
-            angle: 0,
-          },
-        ],
-      };
-
-  aiLineItems.push({
-    print_provider_id: PRINT_PROVIDER_ID,
-    blueprint_id: BLUEPRINT_ID,
-    variant_id: variantId,
-    quantity: item.quantity || 1,
-    external_id: props.ai_id,
-    print_areas: printAreas,
-  });
-
-
+  // Jeśli w tym zamówieniu nie ma naszych AI produktów – nic nie wysyłamy
   if (!aiLineItems.length) {
     console.log("No AI items in this order – nothing to send to Printify.");
     return res.status(200).json({ ok: true, message: "No AI items" });
   }
 
+  // --- ADRES KLIENTA ---
   const shipping = order.shipping_address || {};
   const customer = order.customer || {};
 
