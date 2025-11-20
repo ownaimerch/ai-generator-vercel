@@ -1,13 +1,24 @@
-// api/shopify-order-webhook.js
-
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
-const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID; // to jest OK
+const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID;
 
-// Możesz później przenieść to do env,
-// na razie zostawiamy „na sztywno” – to wartości z Twoich testów
 const PRINT_PROVIDER_ID = Number(process.env.PRINTIFY_PROVIDER_ID || "99");
-const BLUEPRINT_ID = Number(process.env.PRINTIFY_BLUEPRINT_ID || "706");
-const VARIANT_ID = Number(process.env.PRINTIFY_VARIANT_ID || "79153");
+const BLUEPRINT_ID      = Number(process.env.PRINTIFY_BLUEPRINT_ID || "706");
+
+// Domyślny wariant, jeśli nie znajdziemy w mapie (np. White / L)
+const DEFAULT_VARIANT_ID = Number(process.env.PRINTIFY_VARIANT_ID || "73207");
+
+// MAPA: dokładnie takie stringi, jak w Shopify w "variant_title"
+const VARIANT_MAP = {
+  "White / S": 73199,
+  "White / M": 73203,
+  "White / L": 73207,
+  "White / XL": 73211,
+
+  "Black / S": 73196,
+  "Black / M": 73200,
+  "Black / L": 73204,
+  "Black / XL": 73208,
+};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
