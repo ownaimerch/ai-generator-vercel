@@ -1,3 +1,6 @@
+const AI_FRONT_PRODUCT_ID = process.env.AI_FRONT_PRODUCT_ID || "";
+const AI_BACK_PRODUCT_ID  = process.env.AI_BACK_PRODUCT_ID  || "";
+
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID;
 
@@ -19,6 +22,9 @@ const VARIANT_MAP = {
   "Black / L": 73204,
   "Black / XL": 73208,
 };
+
+const AI_FRONT_PRODUCT_ID = process.env.AI_FRONT_PRODUCT_ID || "";
+const AI_BACK_PRODUCT_ID  = process.env.AI_BACK_PRODUCT_ID  || "";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -54,9 +60,37 @@ for (const item of order.line_items || []) {
 
   if (!props.ai_id || !props.ai_image_url) continue;
 
-  // klucz wariantu – to co Shopify wysyła jako "White / S" itd.
-  const variantKey = (item.variant_title || "").trim();
+   const variantKey = (item.variant_title || "").trim();
   const variantId = VARIANT_MAP[variantKey] || DEFAULT_VARIANT_ID;
+
+  // front vs back na podstawie product_id z Shopify
+  const productIdStr = String(item.product_id || "");
+  const isBackProduct =
+    AI_BACK_PRODUCT_ID && productIdStr === String(AI_BACK_PRODUCT_ID);
+
+  const printAreas = isBackProduct
+    ? {
+        back: [
+          {
+            src: props.ai_image_url,
+            scale: 0.55,
+            x: 0.5,
+            y: 0.42,
+            angle: 0,
+          },
+        ],
+      }
+    : {
+        front: [
+          {
+            src: props.ai_image_url,
+            scale: 0.55,
+            x: 0.5,
+            y: 0.42,
+            angle: 0,
+          },
+        ],
+      };
 
   aiLineItems.push({
     print_provider_id: PRINT_PROVIDER_ID,
@@ -64,19 +98,8 @@ for (const item of order.line_items || []) {
     variant_id: variantId,
     quantity: item.quantity || 1,
     external_id: props.ai_id,
-    print_areas: {
-      front: [
-        {
-          src: props.ai_image_url,
-          scale: 0.55,
-          x: 0.5,
-          y: 0.42,
-          angle: 0,
-        },
-      ],
-    },
+    print_areas: printAreas,
   });
-}
 
 
   if (!aiLineItems.length) {
