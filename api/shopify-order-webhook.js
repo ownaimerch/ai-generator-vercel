@@ -62,20 +62,28 @@ export default async function handler(req, res) {
       }
     }
 
-    // interesują nas tylko nasze AI-koszulki
     if (!props.ai_id || !props.ai_image_url) {
       continue;
     }
 
-    // Wariant po tytule, np. "White / S"
     const variantKey = (item.variant_title || "").trim();
     const variantId = VARIANT_MAP[variantKey] || DEFAULT_VARIANT_ID;
 
-    // FRONT vs BACK – po product_id z Shopify
     const productIdStr = String(item.product_id || "");
     const isBackProduct =
       AI_BACK_PRODUCT_ID &&
       productIdStr === String(AI_BACK_PRODUCT_ID);
+
+    // 🔍 DEBUG: zobaczmy co tu się dzieje
+    console.log("🧵 LINE ITEM DEBUG", {
+      title: item.title,
+      product_id: item.product_id,
+      variant_title: item.variant_title,
+      props,
+      AI_BACK_PRODUCT_ID,
+      AI_FRONT_PRODUCT_ID,
+      isBackProduct,
+    });
 
     const printAreas = isBackProduct
       ? {
@@ -102,7 +110,7 @@ export default async function handler(req, res) {
         };
 
     aiLineItems.push({
-      print_provider_id: PRINT_PROVIDER_ID, // TU BYŁ BŁĄD
+      print_provider_id: PRINT_PROVIDER_ID,
       blueprint_id: BLUEPRINT_ID,
       variant_id: variantId,
       quantity: item.quantity || 1,
@@ -111,13 +119,11 @@ export default async function handler(req, res) {
     });
   }
 
-  // Jeśli w tym zamówieniu nie ma naszych AI produktów – nic nie wysyłamy
   if (!aiLineItems.length) {
     console.log("No AI items in this order – nothing to send to Printify.");
     return res.status(200).json({ ok: true, message: "No AI items" });
   }
 
-  // --- ADRES KLIENTA ---
   const shipping = order.shipping_address || {};
   const customer = order.customer || {};
 
