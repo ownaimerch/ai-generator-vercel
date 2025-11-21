@@ -3,23 +3,54 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
+const REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY;
 
-// 🔧 MIEJSCE NA PRAWDZIWE USUWANIE TŁA
-// Na razie ta funkcja nic nie zmienia – tylko zwraca to samo base64.
-// Gdy będziesz chciał, tutaj wkleimy integrację z background-removerem.
+// Usuwanie tła przez remove.bg (prawdziwe PNG z przezroczystością)
 async function maybeRemoveBackground(b64, removeBackground) {
   if (!removeBackground) return b64;
 
-  console.log(
-    "🟡 [BG] removeBackground = true, ale remover jeszcze niepodłączony – używam oryginalnego obrazu."
-  );
+  if (!REMOVEBG_API_KEY) {
+    console.warn("⚠️ REMOVEBG_API_KEY missing – skip background removal");
+    return b64;
+  }
 
-  // TODO:
-  // 1. Wysłać b64 do zewnętrznego API removera tła (np. remove.bg / własny serwis)
-  // 2. Odebrać nowe b64 z PNG z przezroczystym tłem
-  // 3. Zwrócić to nowe b64 zamiast starego
+  try {
+    const params = new URLSearchParams();
+    // surowa base64 bez "data:image/..."
+    params.append("image_file_b64", b64);
+    params.append("size", "auto");
+    params.append("format", "png"); // chcemy PNG z alfą
 
-  return b64;
+    const resp = await fetch("https://api.remove.bg/v1.0/removebg", {
+      method: "POST",
+      headers: {
+        "X-Api-Key": REMOVEBG_API_KEY,
+      },
+      body: params,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(
+        "❌ remove.bg error:",
+        resp.status,
+        resp.statusText,
+        errText
+      );
+      // Jak coś pójdzie źle – lepiej mieć obraz z tłem niż żadnego
+      return b64;
+    }
+
+    // remove.bg zwraca binarne PNG w body
+    const arrayBuffer = await resp.arrayBuffer();
+    const outB64 = Buffer.from(arrayBuffer).toString("base64");
+
+    console.log("✅ remove.bg OK – background removed");
+    return outB64;
+  } catch (e) {
+    console.error("❌ remove.bg exception:", e);
+    return b64;
+  }
 }
 
 export default async function handler(req, res) {
@@ -52,10 +83,10 @@ export default async function handler(req, res) {
     }
 
     if (!PRINTIFY_API_KEY) {
-      console.error("PRINTIFY_API_KEY is missing");
+      console.error("PRINTIFY_API_TOKEN is missing");
       return res
         .status(500)
-        .json({ error: "Server misconfigured: no PRINTIFY_API_KEY" });
+        .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
     // 1) Generowanie obrazu w OpenAI
@@ -72,13 +103,13 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No image returned from OpenAI" });
     }
 
-    // 2) Opcjonalne usuwanie tła (na razie stub)
+    // 2) Opcjonalne usuwanie tła przez remove.bg
     b64 = await maybeRemoveBackground(b64, removeBackground);
 
     // 3) Upload do Printify
     const uploadBody = {
       file_name: `ai-${Date.now()}.png`,
-      contents: b64, // SAMA base64, bez nagłówka
+      contents: b64, // SAMA base64
     };
 
     const printifyResponse = await fetch(
