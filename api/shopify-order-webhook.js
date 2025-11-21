@@ -85,29 +85,31 @@ export default async function handler(req, res) {
       isBackProduct,
     });
 
-    const printAreas = isBackProduct
-      ? {
-          back: [
-            {
-              src: props.ai_image_url,
-              scale: 0.55,
-              x: 0.5,
-              y: 0.42,
-              angle: 0,
-            },
-          ],
-        }
-      : {
-          front: [
-            {
-              src: props.ai_image_url,
-              scale: 0.55,
-              x: 0.5,
-              y: 0.42,
-              angle: 0,
-            },
-          ],
-        };
+      const printAreas = isBackProduct
+    ? {
+        // PLECY – większe i wyżej
+        back: [
+          {
+            src: props.ai_image_url,
+            scale: 0.70, // większy nadruk na plecach
+            x: 0.5,
+            y: 0.35,    // wyżej na plecach (mniejsza wartość = wyżej)
+            angle: 0,
+          },
+        ],
+      }
+    : {
+        // PRZÓD – zostaje jak było
+        front: [
+          {
+            src: props.ai_image_url,
+            scale: 0.55,
+            x: 0.5,
+            y: 0.42,
+            angle: 0,
+          },
+        ],
+      };
 
     aiLineItems.push({
       print_provider_id: PRINT_PROVIDER_ID,
