@@ -2,12 +2,28 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Używamy Printify PAT – tego samego, którego używasz w PowerShellu
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 
+// 🔧 MIEJSCE NA PRAWDZIWE USUWANIE TŁA
+// Na razie ta funkcja nic nie zmienia – tylko zwraca to samo base64.
+// Gdy będziesz chciał, tutaj wkleimy integrację z background-removerem.
+async function maybeRemoveBackground(b64, removeBackground) {
+  if (!removeBackground) return b64;
+
+  console.log(
+    "🟡 [BG] removeBackground = true, ale remover jeszcze niepodłączony – używam oryginalnego obrazu."
+  );
+
+  // TODO:
+  // 1. Wysłać b64 do zewnętrznego API removera tła (np. remove.bg / własny serwis)
+  // 2. Odebrać nowe b64 z PNG z przezroczystym tłem
+  // 3. Zwrócić to nowe b64 zamiast starego
+
+  return b64;
+}
+
 export default async function handler(req, res) {
-  // Prosty CORS – jak miałeś wcześniej
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -29,6 +45,8 @@ export default async function handler(req, res) {
     }
 
     const prompt = (body?.prompt || "").trim();
+    const removeBackground = !!body?.removeBackground;
+
     if (!prompt || prompt.length < 3) {
       return res.status(400).json({ error: "Prompt too short." });
     }
@@ -40,7 +58,7 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_KEY" });
     }
 
-    // 1) Generowanie obrazu w OpenAI (DALL·E 3 → base64)
+    // 1) Generowanie obrazu w OpenAI
     const dalle = await openai.images.generate({
       model: "dall-e-3",
       prompt,
@@ -48,16 +66,19 @@ export default async function handler(req, res) {
       response_format: "b64_json",
     });
 
-    const b64 = dalle?.data?.[0]?.b64_json;
+    let b64 = dalle?.data?.[0]?.b64_json;
     if (!b64) {
       console.error("No image from OpenAI response:", dalle);
       return res.status(500).json({ error: "No image returned from OpenAI" });
     }
 
-    // 2) Upload do Printify (base64 → obraz w ich storage)
+    // 2) Opcjonalne usuwanie tła (na razie stub)
+    b64 = await maybeRemoveBackground(b64, removeBackground);
+
+    // 3) Upload do Printify
     const uploadBody = {
       file_name: `ai-${Date.now()}.png`,
-      contents: b64, // UWAGA: sama base64, bez "data:image/..."
+      contents: b64, // SAMA base64, bez nagłówka
     };
 
     const printifyResponse = await fetch(
@@ -82,7 +103,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Printify zwraca m.in. id, file_url, preview_url
     const imageUrl =
       printifyJson.file_url || printifyJson.preview_url || null;
 
@@ -96,12 +116,11 @@ export default async function handler(req, res) {
     const aiId =
       "ai-" + Date.now() + "-" + Math.random().toString(36).slice(2);
 
-    // 3) Zwracamy mały JSON: bez base64
     return res.status(200).json({
       ok: true,
       aiId,
       prompt,
-      imageUrl, // URL z Printify – użyjemy go i do podglądu, i w zamówieniu
+      imageUrl,
     });
   } catch (err) {
     console.error("❌ generate-image-v3 error:", err);
