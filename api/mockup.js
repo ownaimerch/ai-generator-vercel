@@ -11,11 +11,36 @@ const BASE_IMAGES = {
 };
 
 // 2. Pole nadruku (na start na oko, potem dopieścimy)
+// Współrzędne pola nadruku dopasowane do Twoich mockupów 2048x1365
+
 const PRINT_AREAS = {
-  "white-front": { left: 820, top: 520, width: 900, height: 900 },
-  "white-back":  { left: 820, top: 520, width: 900, height: 900 },
-  "black-front": { left: 820, top: 520, width: 900, height: 900 },
-  "black-back":  { left: 820, top: 520, width: 900, height: 900 },
+  // FRONT – nadruk na prawej koszulce
+  "white-front": {
+    left: 1210,   // start w poziomie
+    top: 380,     // start w pionie
+    width: 480,   // szerokość nadruku
+    height: 480   // wysokość nadruku
+  },
+  "black-front": {
+    left: 1210,
+    top: 380,
+    width: 480,
+    height: 480
+  },
+
+  // BACK – nadruk na lewej koszulce
+  "white-back": {
+    left: 504,
+    top: 374,
+    width: 420,
+    height: 280
+  },
+  "black-back": {
+    left: 504,
+    top: 374,
+    width: 420,
+    height: 280
+  }
 };
 
 export const config = {
