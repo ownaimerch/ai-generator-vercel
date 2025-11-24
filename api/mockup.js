@@ -1,7 +1,7 @@
 // api/mockup.js
 import sharp from "sharp";
 
-// UWAGA: podmień URL-e na prawdziwe linki do Twoich mockupów z Shopify/CDN
+// TU WKLEJASZ URL-E DO SWOICH 4 MOCKUPÓW (PNG/JPG z Shopify Files)
 const BASE_IMAGES = {
   "white-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
   "white-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_back.png?v=1764000460",
@@ -9,8 +9,7 @@ const BASE_IMAGES = {
   "black-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",
 };
 
-// prostokąt nadruku dla każdego mockupu
-// (te liczby trzeba będzie dopasować – na start strzelamy, potem korygujemy)
+// obszary nadruku – na razie przykładowe, potem dopasujemy
 const PRINT_AREAS = {
   "white-front": { left: 820, top: 520, width: 900, height: 900 },
   "white-back":  { left: 820, top: 520, width: 900, height: 900 },
@@ -27,8 +26,32 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  // ---------- CORS ----------
+  const origin = req.headers.origin || "";
+  const allowedOrigins = [
+    "https://ownaimerch.com",
+    "https://www.ownaimerch.com",
+    "https://app.ownaimerch.com",        // jeśli odpalasz coś z subdomeny
+    "https://ai-generator-ower.vercel.app" // podgląd na Vercelu (opcjonalnie)
+  ];
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    // preflight – tylko nagłówki CORS i kończymy
+    res.status(200).end();
+    return;
+  }
+  // ---------- KONIEC CORS ----------
+
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Only POST" });
+    res.status(405).json({ error: "Only POST allowed" });
     return;
   }
 
@@ -49,12 +72,13 @@ export default async function handler(req, res) {
       return;
     }
 
+    // pobieramy bazowy mockup + obraz z AI
     const [baseBuf, designBuf] = await Promise.all([
-      fetch(baseUrl).then(r => r.arrayBuffer()).then(b => Buffer.from(b)),
-      fetch(designUrl).then(r => r.arrayBuffer()).then(b => Buffer.from(b)),
+      fetch(baseUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
+      fetch(designUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
     ]);
 
-    // dopasuj projekt do pola nadruku
+    // dopasowanie projektu do pola nadruku
     const designResized = await sharp(designBuf)
       .resize(printArea.width, printArea.height, { fit: "cover" })
       .png()
