@@ -1,3 +1,7 @@
+npm install sharp
+# albo
+yarn add sharp
+
 {
   "name": "ai-generator-vercel",
   "version": "1.0.0",
