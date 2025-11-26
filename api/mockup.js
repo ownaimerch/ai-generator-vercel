@@ -1,7 +1,6 @@
 // api/mockup.js
 import sharp from "sharp";
 
-// BAZOWE MOCKUPY – tu masz już poprawne URL-e z Shopify Files
 const BASE_IMAGES = {
   "white-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
   "white-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_back.png?v=1764000460",
@@ -9,36 +8,16 @@ const BASE_IMAGES = {
   "black-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459"
 };
 
-// POLE NADRUKU – startowa wersja, którą potem będziemy dopieszczać
-// Mockupy są 2048 x 1365 px
-const PRINT_AREAS = {
-  // FRONT – prawa koszulka
-  "white-front": {
-    left: 1220,
-    top: 630,
-    width: 520,
-    height: 520
-  },
-  "black-front": {
-    left: 1220,
-    top: 630,
-    width: 520,
-    height: 520
-  },
+// PROPORCJE pola nadruku (0–1, liczone względem szer./wys. mockupu)
+// FRONT = prawa koszulka, BACK = lewa koszulka
+const PRINT_LAYOUT = {
+  // front – prawa
+  "white-front": { left: 0.58, top: 0.32, width: 0.24, height: 0.32 },
+  "black-front": { left: 0.58, top: 0.32, width: 0.24, height: 0.32 },
 
-  // BACK – lewa koszulka
-  "white-back": {
-    left: 430,
-    top: 630,
-    width: 520,
-    height: 520
-  },
-  "black-back": {
-    left: 430,
-    top: 630,
-    width: 520,
-    height: 520
-  }
+  // back – lewa
+  "white-back":  { left: 0.18, top: 0.32, width: 0.24, height: 0.32 },
+  "black-back":  { left: 0.18, top: 0.32, width: 0.24, height: 0.32 }
 };
 
 export const config = {
@@ -87,18 +66,33 @@ export default async function handler(req, res) {
 
     const key = `${color.toLowerCase()}-${side.toLowerCase()}`; // np. "black-back"
     const baseUrl = BASE_IMAGES[key];
-    const printArea = PRINT_AREAS[key];
+    const layout = PRINT_LAYOUT[key];
 
-    if (!baseUrl || !printArea) {
+    if (!baseUrl || !layout) {
       res.status(400).json({ error: "Unknown mockup type " + key });
       return;
     }
 
-    // pobierz bazowy mockup i wygenerowany obraz z AI
-    const [baseBuf, designBuf] = await Promise.all([
-      fetch(baseUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
-      fetch(designUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b))
-    ]);
+    // pobierz bazę i projekt
+    const baseBuf = Buffer.from(
+      await fetch(baseUrl).then(r => r.arrayBuffer())
+    );
+    const designBuf = Buffer.from(
+      await fetch(designUrl).then(r => r.arrayBuffer())
+    );
+
+    // odczytaj rozmiar mockupu
+    const meta = await sharp(baseBuf).metadata();
+    const W = meta.width || 2048;
+    const H = meta.height || 1365;
+
+    // przelicz proporcje → piksele
+    const printArea = {
+      left: Math.round(layout.left * W),
+      top: Math.round(layout.top * H),
+      width: Math.round(layout.width * W),
+      height: Math.round(layout.height * H)
+    };
 
     // dopasuj projekt do pola nadruku
     const designResized = await sharp(designBuf)
@@ -106,13 +100,13 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // sklej wszystko
+    // sklej
     const composed = await sharp(baseBuf)
       .composite([
         {
           input: designResized,
-          top: printArea.top,
-          left: printArea.left
+          left: printArea.left,
+          top: printArea.top
         }
       ])
       .jpeg({ quality: 90 })
