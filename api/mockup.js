@@ -13,42 +13,37 @@ const BASE_IMAGES = {
 // 2. Pole nadruku (na start na oko, potem dopieścimy)
 // Współrzędne pola nadruku dopasowane do Twoich mockupów 2048x1365
 
+// Pole nadruku – poprawione pod Twoje mockupy 2048x1365
+// FRONT = prawa koszulka, BACK = lewa koszulka
+
 const PRINT_AREAS = {
-  // FRONT – nadruk na prawej koszulce
+  // FRONT (prawa koszulka – przód)
   "white-front": {
-    left: 1210,   // start w poziomie
-    top: 380,     // start w pionie
-    width: 480,   // szerokość nadruku
-    height: 480   // wysokość nadruku
+    left: 1150,   // przesunięcie w poziomie
+    top: 520,     // przesunięcie w pionie
+    width: 550,   // szerokość nadruku
+    height: 550   // wysokość nadruku
   },
   "black-front": {
-    left: 1210,
-    top: 380,
-    width: 480,
-    height: 480
+    left: 1150,
+    top: 520,
+    width: 550,
+    height: 550
   },
 
-  // BACK – nadruk na lewej koszulce
+  // BACK (lewa koszulka – tył)
   "white-back": {
-    left: 504,
-    top: 374,
-    width: 420,
-    height: 280
+    left: 420,
+    top: 520,
+    width: 550,
+    height: 550
   },
   "black-back": {
-    left: 504,
-    top: 374,
-    width: 420,
-    height: 280
+    left: 420,
+    top: 520,
+    width: 550,
+    height: 550
   }
-};
-
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
-  },
 };
 
 export default async function handler(req, res) {
