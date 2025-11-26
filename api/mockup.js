@@ -94,11 +94,13 @@ export default async function handler(req, res) {
       height: Math.round(layout.height * H)
     };
 
-    // dopasuj projekt do pola nadruku
     const designResized = await sharp(designBuf)
-      .resize(printArea.width, printArea.height, { fit: "cover" })
-      .png()
-      .toBuffer();
+  .resize(printArea.width, printArea.height, {
+    fit: "contain",                         // NIC nie ucina
+    background: { r: 0, g: 0, b: 0, alpha: 0 } // przezroczyste marginesy
+  })
+  .png()
+  .toBuffer();
 
     // sklej
     const composed = await sharp(baseBuf)
