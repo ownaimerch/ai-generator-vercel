@@ -38,8 +38,8 @@ const PRINT_AREAS = {
     height: 520
   },
   "black-back": {
-    left: 430,
-    top: 630,
+    left: 600,
+    top: 500,
     width: 520,
     height: 520
   }
