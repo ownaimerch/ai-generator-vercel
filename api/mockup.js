@@ -15,34 +15,33 @@ const BASE_IMAGES = {
 
 // Pole nadruku – poprawione pod Twoje mockupy 2048x1365
 // FRONT = prawa koszulka, BACK = lewa koszulka
-
 const PRINT_AREAS = {
-  // FRONT (prawa koszulka – przód)
+  // FRONT – prawa koszulka
   "white-front": {
-    left: 1150,   // przesunięcie w poziomie
-    top: 520,     // przesunięcie w pionie
-    width: 550,   // szerokość nadruku
-    height: 550   // wysokość nadruku
+    left: 1220,  // więcej = bardziej w PRAWO
+    top: 630,    // więcej = bardziej w DÓŁ
+    width: 520,  // większa wartość = większy nadruk
+    height: 520
   },
   "black-front": {
-    left: 1150,
-    top: 520,
-    width: 550,
-    height: 550
+    left: 1220,
+    top: 630,
+    width: 520,
+    height: 520
   },
 
-  // BACK (lewa koszulka – tył)
+  // BACK – lewa koszulka
   "white-back": {
-    left: 420,
-    top: 520,
-    width: 550,
-    height: 550
+    left: 430,
+    top: 630,
+    width: 520,
+    height: 520
   },
   "black-back": {
-    left: 420,
-    top: 520,
-    width: 550,
-    height: 550
+    left: 430,
+    top: 630,
+    width: 520,
+    height: 520
   }
 };
 
