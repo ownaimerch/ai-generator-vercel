@@ -11,13 +11,13 @@ const BASE_IMAGES = {
 // PROPORCJE pola nadruku (0–1, liczone względem szer./wys. mockupu)
 // FRONT = prawa koszulka, BACK = lewa koszulka
 const PRINT_LAYOUT = {
-  // front – prawa
-  "white-front": { left: 0.58, top: 0.32, width: 0.24, height: 0.32 },
-  "black-front": { left: 0.58, top: 0.32, width: 0.24, height: 0.32 },
+  // FRONT – prawa koszulka, trochę niżej i większy nadruk
+  "white-front": { left: 0.60, top: 0.40, width: 0.28, height: 0.30 },
+  "black-front": { left: 0.60, top: 0.40, width: 0.28, height: 0.30 },
 
-  // back – lewa
-  "white-back":  { left: 0.18, top: 0.32, width: 0.24, height: 0.32 },
-  "black-back":  { left: 0.18, top: 0.32, width: 0.24, height: 0.32 }
+  // BACK – lewa koszulka
+  "white-back":  { left: 0.22, top: 0.40, width: 0.28, height: 0.30 },
+  "black-back":  { left: 0.22, top: 0.40, width: 0.28, height: 0.30 }
 };
 
 export const config = {
