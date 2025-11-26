@@ -1,70 +1,61 @@
 // api/mockup.js
 import sharp from "sharp";
 
-// 1. PODMIEŃ TE 4 LINKI NA SWOJE Z SHOPIFY FILES
-// (pełne URLe do JPG/PNG, które wgrywałeś jako mockupy bazowe BEZ napisu)
+// BAZOWE MOCKUPY – tu masz już poprawne URL-e z Shopify Files
 const BASE_IMAGES = {
-  "white-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531", // TODO
-  "white-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_back.png?v=1764000460",  // TODO
-  "black-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_front.png?v=1764000531", // TODO
-  "black-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",  // TODO
+  "white-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
+  "white-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_back.png?v=1764000460",
+  "black-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_front.png?v=1764000531",
+  "black-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459"
 };
 
-// 2. Pole nadruku (na start na oko, potem dopieścimy)
-// Współrzędne pola nadruku dopasowane do Twoich mockupów 2048x1365
+// POLE NADRUKU – startowa wersja, którą potem będziemy dopieszczać
+// Mockupy są 2048 x 1365 px
+const PRINT_AREAS = {
+  // FRONT – prawa koszulka
+  "white-front": {
+    left: 1220,
+    top: 630,
+    width: 520,
+    height: 520
+  },
+  "black-front": {
+    left: 1220,
+    top: 630,
+    width: 520,
+    height: 520
+  },
 
-// Pole nadruku – poprawione pod Twoje mockupy 2048x1365
-// FRONT = prawa koszulka, BACK = lewa koszulka
-// ... CORS i sprawdzenie metody zostają jak były ...
-
-try {
-  const { color, side, designUrl } = req.body || {};
-
-  if (!color || !side || !designUrl) {
-    res.status(400).json({ error: "Missing color, side or designUrl" });
-    return;
+  // BACK – lewa koszulka
+  "white-back": {
+    left: 430,
+    top: 630,
+    width: 520,
+    height: 520
+  },
+  "black-back": {
+    left: 430,
+    top: 630,
+    width: 520,
+    height: 520
   }
+};
 
-  // NA RAZIE BIERZEMY ZAWSZE TEN SAM MOCKUP – tylko test
-  const baseUrl = "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459"; // np. czarny front
-
-  const [baseBuf, designBuf] = await Promise.all([
-    fetch(baseUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
-    fetch(designUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
-  ]);
-
-  // UWAGA: dopasowujemy obraz AI do CAŁEGO mockupu
-  // 2048x1365 – jeżeli Twoje mockupy mają inny rozmiar, ustaw ich wymiary
-  const designResized = await sharp(designBuf)
-    .resize(2048, 1365, { fit: "cover" })
-    .toBuffer();
-
-  const composed = await sharp(baseBuf)
-    .composite([
-      {
-        input: designResized,
-        top: 0,
-        left: 0,
-      },
-    ])
-    .jpeg({ quality: 90 })
-    .toBuffer();
-
-  res.setHeader("Content-Type", "image/jpeg");
-  res.status(200).send(composed);
-} catch (err) {
-  console.error("Mockup error:", err);
-  res.status(500).json({ error: "Mockup generation failed" });
-}
-
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb"
+    }
+  }
+};
 
 export default async function handler(req, res) {
-  // ---------- CORS (TO JUŻ U CIEBIE ZADZIAŁAŁO – ZOSTAWIAMY) ----------
+  // ---------- CORS ----------
   const origin = req.headers.origin || "";
   const allowedOrigins = [
     "https://ownaimerch.com",
     "https://www.ownaimerch.com",
-    "https://ownaimerch.myshopify.com" // dodaj tu, jeśli używasz domeny myshopify
+    "https://ownaimerch.myshopify.com"
   ];
 
   if (allowedOrigins.includes(origin)) {
@@ -94,8 +85,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    // np. white-front, black-back
-    const key = `${color.toLowerCase()}-${side.toLowerCase()}`;
+    const key = `${color.toLowerCase()}-${side.toLowerCase()}`; // np. "black-back"
     const baseUrl = BASE_IMAGES[key];
     const printArea = PRINT_AREAS[key];
 
@@ -107,7 +97,7 @@ export default async function handler(req, res) {
     // pobierz bazowy mockup i wygenerowany obraz z AI
     const [baseBuf, designBuf] = await Promise.all([
       fetch(baseUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
-      fetch(designUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
+      fetch(designUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b))
     ]);
 
     // dopasuj projekt do pola nadruku
@@ -122,8 +112,8 @@ export default async function handler(req, res) {
         {
           input: designResized,
           top: printArea.top,
-          left: printArea.left,
-        },
+          left: printArea.left
+        }
       ])
       .jpeg({ quality: 90 })
       .toBuffer();
