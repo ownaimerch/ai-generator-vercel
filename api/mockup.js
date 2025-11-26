@@ -15,35 +15,48 @@ const BASE_IMAGES = {
 
 // Pole nadruku – poprawione pod Twoje mockupy 2048x1365
 // FRONT = prawa koszulka, BACK = lewa koszulka
-const PRINT_AREAS = {
-  // FRONT – prawa koszulka
-  "white-front": {
-    left: 1220,  // więcej = bardziej w PRAWO
-    top: 630,    // więcej = bardziej w DÓŁ
-    width: 520,  // większa wartość = większy nadruk
-    height: 520
-  },
-  "black-front": {
-    left: 1220,
-    top: 630,
-    width: 520,
-    height: 520
-  },
+// ... CORS i sprawdzenie metody zostają jak były ...
 
-  // BACK – lewa koszulka
-  "white-back": {
-    left: 430,
-    top: 630,
-    width: 520,
-    height: 520
-  },
-  "black-back": {
-    left: 600,
-    top: 500,
-    width: 520,
-    height: 520
+try {
+  const { color, side, designUrl } = req.body || {};
+
+  if (!color || !side || !designUrl) {
+    res.status(400).json({ error: "Missing color, side or designUrl" });
+    return;
   }
-};
+
+  // NA RAZIE BIERZEMY ZAWSZE TEN SAM MOCKUP – tylko test
+  const baseUrl = "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459"; // np. czarny front
+
+  const [baseBuf, designBuf] = await Promise.all([
+    fetch(baseUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
+    fetch(designUrl).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)),
+  ]);
+
+  // UWAGA: dopasowujemy obraz AI do CAŁEGO mockupu
+  // 2048x1365 – jeżeli Twoje mockupy mają inny rozmiar, ustaw ich wymiary
+  const designResized = await sharp(designBuf)
+    .resize(2048, 1365, { fit: "cover" })
+    .toBuffer();
+
+  const composed = await sharp(baseBuf)
+    .composite([
+      {
+        input: designResized,
+        top: 0,
+        left: 0,
+      },
+    ])
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  res.setHeader("Content-Type", "image/jpeg");
+  res.status(200).send(composed);
+} catch (err) {
+  console.error("Mockup error:", err);
+  res.status(500).json({ error: "Mockup generation failed" });
+}
+
 
 export default async function handler(req, res) {
   // ---------- CORS (TO JUŻ U CIEBIE ZADZIAŁAŁO – ZOSTAWIAMY) ----------
