@@ -17,12 +17,12 @@ const BASE_IMAGES = {
 //    Możesz potem dopieszczać tylko te liczby (x, y, w, h)
 const PRINT_AREAS_NORM = {
   // FRONT = prawa koszulka
-  "white-front": { x: 0.58, y: 0.32, w: 0.13, h: 0.20 },
-  "black-front": { x: 0.58, y: 0.32, w: 0.13, h: 0.20 },
+  "white-front": { x: 0.575, y: 0.32, w: 0.13, h: 0.20 },
+  "black-front": { x: 0.575, y: 0.32, w: 0.13, h: 0.20 },
 
   // BACK = lewa koszulka
-  "white-back": { x: 0.58, y: 0.32, w: 0.13, h: 0.20 },
-  "black-back": { x: 0.58, y: 0.32, w: 0.13, h: 0.20 },
+  "white-back": { x: 0.575, y: 0.32, w: 0.13, h: 0.20 },
+  "black-back": { x: 0.575, y: 0.32, w: 0.13, h: 0.20 },
 };
 
 export default async function handler(req, res) {
