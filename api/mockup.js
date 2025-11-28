@@ -11,11 +11,16 @@ const BASE_IMAGES = {
 
 // 2. POLA NADRUKU (dla obrazów 2048x1365)
 // FRONT – prawa koszulka; BACK – lewa koszulka
+// 2. POLA NADRUKU (dla obrazów 2048x1365)
+// FRONT – prawa koszulka; BACK – lewa koszulka
 const PRINT_AREAS = {
-  "white-front": { left: 1018, top: 420, width: 650, height: 520 },
-  "black-front": { left: 1018, top: 420, width: 650, height: 520 },
-  "white-back":  { left: 380,  top: 420, width: 650, height: 520 },
-  "black-back":  { left: 380,  top: 420, width: 650, height: 520 },
+  // FRONT: prawa koszulka – środek klaty
+  "white-front": { left: 1120, top: 640, width: 620, height: 540 },
+  "black-front": { left: 1120, top: 640, width: 620, height: 540 },
+
+  // BACK: lewa koszulka – środek pleców
+  "white-back":  { left: 460,  top: 640, width: 620, height: 540 },
+  "black-back":  { left: 460,  top: 640, width: 620, height: 540 },
 };
 
 export default async function handler(req, res) {
