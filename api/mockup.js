@@ -1,40 +1,30 @@
 // api/mockup.js
 import sharp from "sharp";
 
+// 1. BAZOWE MOCKUPY – BEZ NAPISU
 const BASE_IMAGES = {
   "white-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
   "white-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_back.png?v=1764000460",
   "black-front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_front.png?v=1764000531",
-  "black-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459"
+  "black-back":  "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",
 };
 
-// PROPORCJE pola nadruku (0–1, liczone względem szer./wys. mockupu)
-// FRONT = prawa koszulka, BACK = lewa koszulka
-const PRINT_LAYOUT = {
-  // FRONT – prawa koszulka, trochę niżej i większy nadruk
-  "white-front": { left: 0.60, top: 0.40, width: 0.28, height: 0.30 },
-  "black-front": { left: 0.60, top: 0.40, width: 0.28, height: 0.30 },
-
-  // BACK – lewa koszulka
-  "white-back":  { left: 0.22, top: 0.40, width: 0.28, height: 0.30 },
-  "black-back":  { left: 0.22, top: 0.40, width: 0.28, height: 0.30 }
-};
-
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb"
-    }
-  }
+// 2. POLA NADRUKU (dla obrazów 2048x1365)
+// FRONT – prawa koszulka; BACK – lewa koszulka
+const PRINT_AREAS = {
+  "white-front": { left: 1018, top: 420, width: 650, height: 520 },
+  "black-front": { left: 1018, top: 420, width: 650, height: 520 },
+  "white-back":  { left: 380,  top: 420, width: 650, height: 520 },
+  "black-back":  { left: 380,  top: 420, width: 650, height: 520 },
 };
 
 export default async function handler(req, res) {
-  // ---------- CORS ----------
+  // --- CORS ---
   const origin = req.headers.origin || "";
   const allowedOrigins = [
     "https://ownaimerch.com",
     "https://www.ownaimerch.com",
-    "https://ownaimerch.myshopify.com"
+    "https://ownaimerch.myshopify.com",
   ];
 
   if (allowedOrigins.includes(origin)) {
@@ -49,7 +39,6 @@ export default async function handler(req, res) {
     res.status(200).end();
     return;
   }
-  // ---------- KONIEC CORS ----------
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "Only POST allowed" });
@@ -64,52 +53,33 @@ export default async function handler(req, res) {
       return;
     }
 
-    const key = `${color.toLowerCase()}-${side.toLowerCase()}`; // np. "black-back"
+    const key = `${color.toLowerCase()}-${side.toLowerCase()}`; // np. "black-front"
     const baseUrl = BASE_IMAGES[key];
-    const layout = PRINT_LAYOUT[key];
+    const area = PRINT_AREAS[key];
 
-    if (!baseUrl || !layout) {
+    if (!baseUrl || !area) {
       res.status(400).json({ error: "Unknown mockup type " + key });
       return;
     }
 
-    // pobierz bazę i projekt
-    const baseBuf = Buffer.from(
-      await fetch(baseUrl).then(r => r.arrayBuffer())
-    );
-    const designBuf = Buffer.from(
-      await fetch(designUrl).then(r => r.arrayBuffer())
-    );
+    const [baseBuf, designBuf] = await Promise.all([
+      fetch(baseUrl).then(r => r.arrayBuffer()).then(b => Buffer.from(b)),
+      fetch(designUrl).then(r => r.arrayBuffer()).then(b => Buffer.from(b)),
+    ]);
 
-    // odczytaj rozmiar mockupu
-    const meta = await sharp(baseBuf).metadata();
-    const W = meta.width || 2048;
-    const H = meta.height || 1365;
-
-    // przelicz proporcje → piksele
-    const printArea = {
-      left: Math.round(layout.left * W),
-      top: Math.round(layout.top * H),
-      width: Math.round(layout.width * W),
-      height: Math.round(layout.height * H)
-    };
-
+    // dopasuj projekt do pola nadruku
     const designResized = await sharp(designBuf)
-  .resize(printArea.width, printArea.height, {
-    fit: "contain",                         // NIC nie ucina
-    background: { r: 0, g: 0, b: 0, alpha: 0 } // przezroczyste marginesy
-  })
-  .png()
-  .toBuffer();
+      .resize(area.width, area.height, { fit: "cover" })
+      .png()
+      .toBuffer();
 
-    // sklej
     const composed = await sharp(baseBuf)
       .composite([
         {
           input: designResized,
-          left: printArea.left,
-          top: printArea.top
-        }
+          top: area.top,
+          left: area.left,
+        },
       ])
       .jpeg({ quality: 90 })
       .toBuffer();
