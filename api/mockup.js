@@ -1,7 +1,7 @@
 // api/mockup.js
 import sharp from "sharp";
 
-// 1. BAZOWE MOCKUPY – TWOJE URL-e z Shopify Files
+// 1. URL-e bazowych mockupów z Shopify Files
 const BASE_IMAGES = {
   "white-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
@@ -13,19 +13,18 @@ const BASE_IMAGES = {
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",
 };
 
-// 2. POLA NADRUKU – współrzędne liczone dla mockupów 2048×1365
-// FRONT – prawa koszulka; BACK – lewa koszulka
+// 2. Pola nadruku (x, y, szerokość, wysokość) – startowe wartości
+// Jeśli potem trzeba będzie je dopieścić o +/- 20–40 px – damy radę.
 const PRINT_AREAS = {
-  // FRONT: prawa koszulka – środek klaty
-  "white-front": { left: 1120, top: 640, width: 620, height: 540 },
-  "black-front": { left: 1120, top: 640, width: 620, height: 540 },
+  // FRONT – prawa koszulka
+  "white-front": { left: 1120, top: 620, width: 620, height: 540 },
+  "black-front": { left: 1120, top: 620, width: 620, height: 540 },
 
-  // BACK: lewa koszulka – środek pleców
-  "white-back": { left: 460, top: 640, width: 620, height: 540 },
-  "black-back": { left: 460, top: 640, width: 620, height: 540 },
+  // BACK – lewa koszulka
+  "white-back": { left: 420, top: 620, width: 620, height: 540 },
+  "black-back": { left: 420, top: 620, width: 620, height: 540 },
 };
 
-// 3. GŁÓWNY HANDLER
 export default async function handler(req, res) {
   // ---------- CORS ----------
   const origin = req.headers.origin || "";
@@ -64,6 +63,7 @@ export default async function handler(req, res) {
       return;
     }
 
+    // np. "black-back"
     const key = `${String(color).toLowerCase()}-${String(side).toLowerCase()}`;
     const baseUrl = BASE_IMAGES[key];
     const area = PRINT_AREAS[key];
@@ -73,7 +73,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    // pobieramy bazowy mockup i wygenerowaną grafikę AI
+    console.log("MOCKUP KEY:", key, "AREA:", area);
+
+    // pobierz bazowy mockup i wygenerowaną grafikę
     const [baseBuf, designBuf] = await Promise.all([
       fetch(baseUrl)
         .then((r) => r.arrayBuffer())
@@ -83,13 +85,13 @@ export default async function handler(req, res) {
         .then((b) => Buffer.from(b)),
     ]);
 
-    // dopasowanie projektu do pola nadruku
+    // dopasuj grafikę AI do pola nadruku
     const designResized = await sharp(designBuf)
       .resize(area.width, area.height, { fit: "cover" })
       .png()
       .toBuffer();
 
-    // złożenie mockupu
+    // W TYM MIEJSCU MUSI BYĆ left/top – tylko JEDEN composite w pliku
     const composed = await sharp(baseBuf)
       .composite([
         {
