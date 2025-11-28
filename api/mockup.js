@@ -13,16 +13,16 @@ const BASE_IMAGES = {
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",
 };
 
-// 2. Pola nadruku (x, y, szerokość, wysokość) – startowe wartości
-// Jeśli potem trzeba będzie je dopieścić o +/- 20–40 px – damy radę.
-const PRINT_AREAS = {
-  // FRONT – prawa koszulka
-  "white-front": { left: 1120, top: 620, width: 620, height: 540 },
-  "black-front": { left: 1120, top: 620, width: 620, height: 540 },
+// 2. Pola nadruku w PROCENTACH (0–1) względem całego obrazka
+//    Możesz potem dopieszczać tylko te liczby (x, y, w, h)
+const PRINT_AREAS_NORM = {
+  // FRONT = prawa koszulka
+  "white-front": { x: 0.58, y: 0.32, w: 0.25, h: 0.30 },
+  "black-front": { x: 0.58, y: 0.32, w: 0.25, h: 0.30 },
 
-  // BACK – lewa koszulka
-  "white-back": { left: 420, top: 620, width: 620, height: 540 },
-  "black-back": { left: 420, top: 620, width: 620, height: 540 },
+  // BACK = lewa koszulka
+  "white-back": { x: 0.20, y: 0.32, w: 0.25, h: 0.30 },
+  "black-back": { x: 0.20, y: 0.32, w: 0.25, h: 0.30 },
 };
 
 export default async function handler(req, res) {
@@ -63,41 +63,57 @@ export default async function handler(req, res) {
       return;
     }
 
-    // np. "black-back"
     const key = `${String(color).toLowerCase()}-${String(side).toLowerCase()}`;
     const baseUrl = BASE_IMAGES[key];
-    const area = PRINT_AREAS[key];
+    const areaNorm = PRINT_AREAS_NORM[key];
 
-    if (!baseUrl || !area) {
+    if (!baseUrl || !areaNorm) {
       res.status(400).json({ error: "Unknown mockup type: " + key });
       return;
     }
 
-    console.log("MOCKUP KEY:", key, "AREA:", area);
+    // pobierz bazowy mockup
+    const baseBuf = Buffer.from(
+      await (await fetch(baseUrl)).arrayBuffer()
+    );
 
-    // pobierz bazowy mockup i wygenerowaną grafikę
-    const [baseBuf, designBuf] = await Promise.all([
-      fetch(baseUrl)
-        .then((r) => r.arrayBuffer())
-        .then((b) => Buffer.from(b)),
-      fetch(designUrl)
-        .then((r) => r.arrayBuffer())
-        .then((b) => Buffer.from(b)),
-    ]);
+    // odczytujemy realną szerokość / wysokość mockupa
+    const meta = await sharp(baseBuf).metadata();
+    const baseW = meta.width || 0;
+    const baseH = meta.height || 0;
+
+    if (!baseW || !baseH) {
+      throw new Error("Cannot read mockup size");
+    }
+
+    // przeliczamy procenty na piksele
+    const printArea = {
+      left: Math.round(areaNorm.x * baseW),
+      top: Math.round(areaNorm.y * baseH),
+      width: Math.round(areaNorm.w * baseW),
+      height: Math.round(areaNorm.h * baseH),
+    };
+
+    console.log("MOCKUP", key, "SIZE", baseW, baseH, "AREA", printArea);
+
+    // pobierz wygenerowaną grafikę
+    const designBuf = Buffer.from(
+      await (await fetch(designUrl)).arrayBuffer()
+    );
 
     // dopasuj grafikę AI do pola nadruku
     const designResized = await sharp(designBuf)
-      .resize(area.width, area.height, { fit: "cover" })
+      .resize(printArea.width, printArea.height, { fit: "cover" })
       .png()
       .toBuffer();
 
-    // W TYM MIEJSCU MUSI BYĆ left/top – tylko JEDEN composite w pliku
+    // WSTAWIAMY Z WSPÓŁRZĘDNYMI – JEDYNY composite W PLIKU
     const composed = await sharp(baseBuf)
       .composite([
         {
           input: designResized,
-          left: area.left,
-          top: area.top,
+          left: printArea.left,
+          top: printArea.top,
         },
       ])
       .jpeg({ quality: 90 })
