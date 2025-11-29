@@ -5,7 +5,46 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 const REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY;
 
-// Usuwanie tła przez remove.bg (prawdziwe PNG z przezroczystością)
+// ---------- PSEUDO-BAZA UŻYTKOWNIKÓW (IN-MEMORY) ----------
+// Uwaga: na Vercelu to NIE jest trwałe – po re-deployu / restarcie znika.
+// To jest SZKIELET logiki kredytów, nie finalna baza.
+const memoryUsers = new Map(); // key: "cust_<id>" / "email_<email>"
+
+// pomocnicze: klucz usera
+function getUserKey(customer) {
+  if (!customer) return null;
+  if (customer.id != null) return "cust_" + String(customer.id);
+  if (customer.email) return "email_" + String(customer.email).toLowerCase();
+  return null;
+}
+
+// pobierz lub utwórz rekord usera
+function getOrCreateUser(customer) {
+  const key = getUserKey(customer);
+  if (!key) return null;
+
+  if (!memoryUsers.has(key)) {
+    memoryUsers.set(key, {
+      id: customer.id || null,
+      email: customer.email || null,
+      freeUsed: false,      // czy zużył już darmową generację
+      credits: 0,           // kredyty z pakietów (na razie 0)
+      canRemoveBg: false,   // czy plan obejmuje remove.bg (na razie false)
+    });
+  }
+  return memoryUsers.get(key);
+}
+
+function saveUser(customer, userRecord) {
+  const key = getUserKey(customer);
+  if (!key) return;
+  memoryUsers.set(key, userRecord);
+}
+
+// ile darmowych generacji na konto
+const MAX_FREE_GENERATIONS_PER_USER = 1;
+
+// ---------- remove.bg – bez zmian ----------
 async function maybeRemoveBackground(b64, removeBackground) {
   if (!removeBackground) return b64;
 
@@ -16,10 +55,9 @@ async function maybeRemoveBackground(b64, removeBackground) {
 
   try {
     const params = new URLSearchParams();
-    // surowa base64 bez "data:image/..."
     params.append("image_file_b64", b64);
     params.append("size", "auto");
-    params.append("format", "png"); // chcemy PNG z alfą
+    params.append("format", "png");
 
     const resp = await fetch("https://api.remove.bg/v1.0/removebg", {
       method: "POST",
@@ -37,11 +75,9 @@ async function maybeRemoveBackground(b64, removeBackground) {
         resp.statusText,
         errText
       );
-      // Jak coś pójdzie źle – lepiej mieć obraz z tłem niż żadnego
       return b64;
     }
 
-    // remove.bg zwraca binarne PNG w body
     const arrayBuffer = await resp.arrayBuffer();
     const outB64 = Buffer.from(arrayBuffer).toString("base64");
 
@@ -54,7 +90,7 @@ async function maybeRemoveBackground(b64, removeBackground) {
 }
 
 export default async function handler(req, res) {
-  // CORS
+  // ---------- CORS ----------
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -77,9 +113,57 @@ export default async function handler(req, res) {
 
     const prompt = (body?.prompt || "").trim();
     const removeBackground = !!body?.removeBackground;
+    const customer = body?.customer || null; // <-- dochodzi z frontu
 
     if (!prompt || prompt.length < 3) {
       return res.status(400).json({ error: "Prompt too short." });
+    }
+
+    // ---------- WYMAGAMY KONTA ----------
+    if (!customer || (!customer.id && !customer.email)) {
+      return res.status(401).json({
+        error: "You must be logged in to use the AI generator.",
+        code: "NOT_AUTHENTICATED",
+      });
+    }
+
+    const user = getOrCreateUser(customer);
+    if (!user) {
+      return res
+        .status(500)
+        .json({ error: "Cannot create user record." });
+    }
+
+    const wantsRemoveBg = removeBackground === true;
+
+    // ---------- BLOKADA REMOVE.BG BEZ PLANU ----------
+    if (wantsRemoveBg && !user.canRemoveBg) {
+      return res.status(403).json({
+        error: "Your current plan does not include background removal.",
+        code: "NO_REMOVE_BG",
+      });
+    }
+
+    // ---------- LOGIKA 1 FREE + KREDYTY ----------
+    let canGenerate = false;
+    let usingFree = false;
+
+    if (!user.freeUsed && user.credits <= 0) {
+      // darmowa generacja (tylko 1 na konto)
+      canGenerate = true;
+      usingFree = true;
+    } else if (user.credits > 0) {
+      // generacja z kredytu
+      canGenerate = true;
+      usingFree = false;
+    }
+
+    if (!canGenerate) {
+      return res.status(402).json({
+        error:
+          "You have used your free generation and have no credits left. Please buy a package to generate more designs.",
+        code: "NO_CREDITS",
+      });
     }
 
     if (!PRINTIFY_API_KEY) {
@@ -89,7 +173,7 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
-    // 1) Generowanie obrazu w OpenAI
+    // ---------- 1) Generowanie obrazu w OpenAI ----------
     const dalle = await openai.images.generate({
       model: "dall-e-3",
       prompt,
@@ -100,16 +184,18 @@ export default async function handler(req, res) {
     let b64 = dalle?.data?.[0]?.b64_json;
     if (!b64) {
       console.error("No image from OpenAI response:", dalle);
-      return res.status(500).json({ error: "No image returned from OpenAI" });
+      return res
+        .status(500)
+        .json({ error: "No image returned from OpenAI" });
     }
 
-    // 2) Opcjonalne usuwanie tła przez remove.bg
-    b64 = await maybeRemoveBackground(b64, removeBackground);
+    // ---------- 2) Opcjonalne usuwanie tła ----------
+    b64 = await maybeRemoveBackground(b64, wantsRemoveBg);
 
-    // 3) Upload do Printify
+    // ---------- 3) Upload do Printify ----------
     const uploadBody = {
       file_name: `ai-${Date.now()}.png`,
-      contents: b64, // SAMA base64
+      contents: b64,
     };
 
     const printifyResponse = await fetch(
@@ -147,11 +233,23 @@ export default async function handler(req, res) {
     const aiId =
       "ai-" + Date.now() + "-" + Math.random().toString(36).slice(2);
 
+    // ---------- dopiero TU zapisujemy zużycie free / kredytu ----------
+    if (usingFree) {
+      user.freeUsed = true;
+    } else if (!usingFree && user.credits > 0) {
+      user.credits = user.credits - 1;
+    }
+    saveUser(customer, user);
+
     return res.status(200).json({
       ok: true,
       aiId,
       prompt,
       imageUrl,
+      // bonus info na przyszłość
+      creditsLeft: user.credits,
+      freeUsed: user.freeUsed,
+      canRemoveBg: user.canRemoveBg,
     });
   } catch (err) {
     console.error("❌ generate-image-v3 error:", err);
