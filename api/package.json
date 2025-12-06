@@ -1,8 +1,16 @@
 {
-  "name": "ai-generator-vercel",
+  "name": "ownaimerch-api",
   "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "start": "vercel dev"
+  },
   "dependencies": {
-    "openai": "^4.0.0",
-    "@supabase/supabase-js": "^2.48.0"
+    "openai": "^4.72.0",
+    "@supabase/supabase-js": "^2.48.0",
+    "sharp": "^0.33.5"
   }
 }
