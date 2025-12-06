@@ -1,9 +1,8 @@
 {
   "name": "ai-generator-vercel",
   "version": "1.0.0",
-  "type": "module",
   "dependencies": {
-    "openai": "^5.7.0",
-    "sharp": "^0.33.3"
+    "openai": "^4.0.0",
+    "@supabase/supabase-js": "^2.48.0"
   }
 }
