@@ -1,6 +1,6 @@
 // api/generate-image-v3.js
 import OpenAI from "openai";
-import { getOrCreateUser, chargeCredits, CREDIT_COSTS } from "../../lib/credits.js";
+import { getOrCreateUser, chargeCredits, CREDIT_COSTS } from ".../credits.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
