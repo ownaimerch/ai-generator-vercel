@@ -1,16 +1,14 @@
 // api/generate-image-v3.js
 import OpenAI from "openai";
-import {
-  getOrCreateCreditsRow,
-  getCostForRequest,
-  deductCredits,
-} from "../lib/credits.js"; // dostosuj ścieżkę jeśli inna struktura
+import { getOrCreateUser, chargeCredits, CREDIT_COSTS } from "../../lib/credits.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 const REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY;
 
-// Usuwanie tła przez remove.bg (prawdziwe PNG z przezroczystością)
+/**
+ * Usuwanie tła przez remove.bg – zwraca base64 PNG
+ */
 async function maybeRemoveBackground(b64, removeBackground) {
   if (!removeBackground) return b64;
 
@@ -21,7 +19,7 @@ async function maybeRemoveBackground(b64, removeBackground) {
 
   try {
     const params = new URLSearchParams();
-    params.append("image_file_b64", b64); // surowa base64 bez nagłówka
+    params.append("image_file_b64", b64); // sama base64
     params.append("size", "auto");
     params.append("format", "png");
 
@@ -35,13 +33,8 @@ async function maybeRemoveBackground(b64, removeBackground) {
 
     if (!resp.ok) {
       const errText = await resp.text();
-      console.error(
-        "❌ remove.bg error:",
-        resp.status,
-        resp.statusText,
-        errText
-      );
-      return b64;
+      console.error("❌ remove.bg error:", resp.status, resp.statusText, errText);
+      return b64; // w razie błędu wolimy mieć obraz z tłem niż żaden
     }
 
     const arrayBuffer = await resp.arrayBuffer();
@@ -79,18 +72,14 @@ export default async function handler(req, res) {
 
     const prompt = (body?.prompt || "").trim();
     const removeBackground = !!body?.removeBackground;
-    const customer = body?.customer || null;
+    const customer = body?.customer || null; // { id, email } – z frontu
 
     if (!prompt || prompt.length < 3) {
       return res.status(400).json({ error: "Prompt too short." });
     }
 
-    // 🔐 1) Wymagamy zalogowanego klienta (frontend już to robi, ale backend musi też)
     if (!customer || !customer.id) {
-      return res.status(401).json({
-        error: "Login required",
-        code: "not_logged_in",
-      });
+      return res.status(401).json({ error: "Login required." });
     }
 
     if (!PRINTIFY_API_KEY) {
@@ -100,20 +89,25 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
-    // 💳 2) Kredyty – sprawdzamy saldo (i tworzymy rekord jeśli pierwszy raz)
-    const creditsRow = await getOrCreateCreditsRow(customer);
-    const cost = getCostForRequest({ removeBackground });
+    // 1) User + kredyty
+    const user = await getOrCreateUser(customer);
 
-    if (creditsRow.balance < cost) {
+    // ile kredytów potrzeba
+    let cost = CREDIT_COSTS.GENERATE;
+    if (removeBackground) {
+      cost += CREDIT_COSTS.REMOVE_BG_EXTRA;
+    }
+
+    if ((user.credits || 0) < cost) {
       return res.status(402).json({
-        error: "Not enough credits",
-        code: "not_enough_credits",
-        balance: creditsRow.balance,
-        required: cost,
+        error: "INSUFFICIENT_CREDITS",
+        message: "Not enough credits. Please buy a package.",
+        credits: user.credits || 0,
+        needed: cost,
       });
     }
 
-    // 3) Generowanie obrazu w OpenAI
+    // 2) Generowanie obrazu w OpenAI
     const dalle = await openai.images.generate({
       model: "dall-e-3",
       prompt,
@@ -127,13 +121,13 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No image returned from OpenAI" });
     }
 
-    // 4) Opcjonalne usuwanie tła przez remove.bg
+    // 3) Opcjonalne usuwanie tła przez remove.bg
     b64 = await maybeRemoveBackground(b64, removeBackground);
 
-    // 5) Upload do Printify
+    // 4) Upload do Printify
     const uploadBody = {
       file_name: `ai-${Date.now()}.png`,
-      contents: b64,
+      contents: b64, // sama base64
     };
 
     const printifyResponse = await fetch(
@@ -168,31 +162,32 @@ export default async function handler(req, res) {
         .json({ error: "Printify did not return image URL" });
     }
 
-    // 💳 6) Dopiero teraz ODLICZAMY kredyty (bo wszystko się udało)
-    const deductResult = await deductCredits(customer, cost);
-    if (!deductResult.ok) {
-      // Teoretycznie nie powinno się zdarzyć, ale jak coś – nie psujemy userowi flow,
-      // tylko logujemy i dalej zwracamy obraz.
-      console.error(
-        "❌ Failed to deduct credits after success. Customer:",
-        customer.id
-      );
-    }
-
     const aiId =
       "ai-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+
+    // 5) Dopiero TERAZ zdejmujemy kredyty (bo generacja się udała)
+    try {
+      await chargeCredits(user.id, cost, {
+        type: removeBackground ? "generate+remove_bg" : "generate",
+        prompt,
+      });
+    } catch (creditErr) {
+      // jak coś pójdzie nie tak – logujemy, ale klient dostaje obraz
+      console.error("❌ chargeCredits error:", creditErr);
+    }
 
     return res.status(200).json({
       ok: true,
       aiId,
       prompt,
       imageUrl,
-      creditsLeft: deductResult.ok
-        ? deductResult.balance
-        : creditsRow.balance - cost, // best effort
+      cost,
     });
   } catch (err) {
     console.error("❌ generate-image-v3 error:", err);
+    if (err.code === "INSUFFICIENT_CREDITS") {
+      return res.status(402).json({ error: "INSUFFICIENT_CREDITS" });
+    }
     return res
       .status(500)
       .json({ error: err?.message || "Unknown server error" });
