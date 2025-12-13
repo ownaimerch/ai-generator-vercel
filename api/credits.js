@@ -1,142 +1,164 @@
 // api/credits.js
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn(
-    "⚠️ Supabase env vars missing (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)"
-  );
+if (!supabaseUrl || !supabaseKey) {
+  console.warn("⚠️ Supabase env vars missing (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
 }
 
+const supabase = supabaseUrl && supabaseKey
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
+
+// 1 token = normalna generacja
+// 3 tokeny = generacja + remove.bg
 export const CREDIT_COSTS = {
-  generate: 1,              // samo generowanie
-  "generate+remove_bg": 3,  // generowanie + remove.bg
+  generate: 1,
+  generate_remove_bg: 3,
 };
 
-const supabase =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      })
-    : null;
-
-// --- UŻYTKOWNIK ---
-
-export async function getOrCreateUser(customer) {
-  if (!supabase) throw new Error("Supabase not configured");
-  if (!customer || typeof customer.id === "undefined") {
-    throw new Error("Missing customer.id");
+export async function getOrCreateUser({ id, email }) {
+  if (!supabase) {
+    throw new Error("Supabase is not configured");
+  }
+  if (!id) {
+    throw new Error("User id is required");
   }
 
-  const id = Number(customer.id);
-  const email = customer.email || null;
-
-  // Szukamy istniejącego usera
-  const { data, error } = await supabase
+  // szukamy usera
+  const { data: existing, error } = await supabase
     .from("ai_users")
     .select("*")
     .eq("id", id)
-    .limit(1);
+    .maybeSingle();
 
   if (error) {
-    console.error("Supabase select ai_users error:", error);
-    throw error;
+    console.error("Supabase getOrCreateUser error (select):", error);
+    throw new Error("DB_ERROR");
   }
 
-  if (data && data.length > 0) {
-    return data[0];
+  // jak jest, to go zwracamy
+  if (existing) {
+    return existing;
   }
 
-  // Nowy user – 1 darmowy kredyt
-  const { data: inserted, error: insertError } = await supabase
+  // jak nie ma – tworzymy nowego z 0 kredytów i freebie_used = false (domyślnie)
+  const { data, error: insertErr } = await supabase
     .from("ai_users")
     .insert({
       id,
-      email,
-      credits: 1,
+      email: email || null,
+      credits: 0, // pakiety będą dopłacać kredyty
+      // freebie_used ma default false z migracji
     })
     .select("*")
     .single();
 
-  if (insertError) {
-    console.error("Supabase insert ai_users error:", insertError);
-    throw insertError;
+  if (insertErr) {
+    console.error("Supabase getOrCreateUser error (insert):", insertErr);
+    throw new Error("DB_ERROR");
   }
 
-  return inserted;
+  return data;
 }
 
-// --- KREDYTY ---
+/**
+ * chargeCredits:
+ * - 1) jeśli user ma jeszcze FREEBIE (freebie_used = false) -> ta generacja jest ZA DARMO (cost=0)
+ * - 2) jeśli freebie już wykorzystane, sprawdzamy czy ma wystarczająco kredytów
+ * - 3) zapisujemy nowy stan kredytów + log do ai_usage
+ */
+export async function chargeCredits(userId, type, prompt) {
+  if (!supabase) throw new Error("Supabase is not configured");
 
-// Obsługujemy 2 warianty wywołania:
-// chargeCredits(userId, type, cost, prompt)
-// chargeCredits(userId, type, prompt)
-export async function chargeCredits(userId, type, costOrPrompt, maybePrompt) {
-  if (!supabase) throw new Error("Supabase not configured");
+  const baseCost =
+    type === "generate_remove_bg"
+      ? CREDIT_COSTS.generate_remove_bg
+      : CREDIT_COSTS.generate;
 
-  let cost;
-  let prompt;
-
-  if (typeof costOrPrompt === "number") {
-    cost = costOrPrompt;
-    prompt = maybePrompt || null;
-  } else {
-    cost = CREDIT_COSTS[type] ?? CREDIT_COSTS.generate;
-    prompt = costOrPrompt || null;
-  }
-
-  const { data: user, error: userError } = await supabase
+  // wczytujemy aktualnego usera
+  const { data: user, error: userErr } = await supabase
     .from("ai_users")
-    .select("*")
+    .select("id, credits, freebie_used")
     .eq("id", userId)
     .single();
 
-  if (userError) {
-    console.error("Supabase select ai_users error:", userError);
-    throw userError;
+  if (userErr || !user) {
+    console.error("chargeCredits: user fetch error:", userErr);
+    throw new Error("USER_NOT_FOUND");
   }
 
-  if (!user || typeof user.credits !== "number" || user.credits < cost) {
-    const err = new Error("Not enough credits");
-    err.code = "NO_CREDITS";
-    err.creditsLeft = user ? user.credits : 0;
-    throw err;
+  const currentCredits = user.credits ?? 0;
+
+  let cost = baseCost;
+  let finalType = type;
+  let freebieJustUsed = false;
+
+  // --- FREEBIE LOGIKA ---
+  if (!user.freebie_used) {
+    // ta pierwsza generacja jest za darmo
+    cost = 0;
+    finalType = "freebie_" + type; // np. 'freebie_generate'
+    freebieJustUsed = true;
+  } else {
+    // freebie już poszło -> normalne zużywanie kredytów
+    if (currentCredits < baseCost) {
+      // specjalny kod błędu, żeby frontend mógł pokazać sensowny komunikat
+      const msg =
+        currentCredits <= 0
+          ? "NOT_ENOUGH_CREDITS:0"
+          : `NOT_ENOUGH_CREDITS:${currentCredits}`;
+      throw new Error(msg);
+    }
   }
 
-  const newCredits = user.credits - cost;
+  const newCredits = currentCredits - cost;
 
-  const { error: updateError } = await supabase
+  // aktualizacja usera
+  const updates = {
+    credits: newCredits,
+    updated_at: new Date().toISOString(),
+  };
+  if (freebieJustUsed) {
+    updates.freebie_used = true;
+  }
+
+  const { error: updateErr } = await supabase
     .from("ai_users")
-    .update({ credits: newCredits })
+    .update(updates)
     .eq("id", userId);
 
-  if (updateError) {
-    console.error("Supabase update ai_users error:", updateError);
-    throw updateError;
+  if (updateErr) {
+    console.error("chargeCredits: update error:", updateErr);
+    throw new Error("DB_ERROR");
   }
 
-  const { error: logError } = await supabase.from("ai_usage").insert({
+  // log użycia
+  const { error: logErr } = await supabase.from("ai_usage").insert({
     user_id: userId,
-    type,
-    cost,
+    type: finalType,
     prompt: prompt || null,
+    cost,
   });
 
-  if (logError) {
-    console.error("Supabase insert ai_usage error:", logError);
-    // nie przerywamy – kredyty już zeszły
+  if (logErr) {
+    console.error("chargeCredits: log insert error:", logErr);
+    // nie przerywamy już – kredyty zostały odjęte, więc treat as success
   }
 
-  return { creditsLeft: newCredits };
+  return {
+    cost,
+    remainingCredits: newCredits,
+    freebieUsed: freebieJustUsed || !!user.freebie_used,
+  };
 }
 
-// --- HTTP endpoint: GET /api/credits ---
-// użyjemy go z frontendu do pokazania licznika
+// OPTIONAL: endpoint GET /api/credits – zwraca stan kredytów (na potrzeby licznika w UI)
 export default async function handler(req, res) {
-  // CORS – pozwalamy na wywołanie z ownaimerch.com
-  res.setHeader("Access-Control-Allow-Origin", "https://ownaimerch.com");
+  // proste CORS (tak jak w generate-image-v3)
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Max-Age", "86400");
@@ -150,35 +172,27 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: "Supabase not configured" });
+    const idRaw = req.query.customerId;
+    const email = req.query.email;
+
+    const id = idRaw ? parseInt(String(idRaw), 10) : null;
+    if (!id) {
+      return res.status(400).json({ error: "customerId is required" });
     }
 
-    const customerId =
-      Number(req.query.customerId) ||
-      Number(req.body && req.body.customerId);
-
-    const email =
-      (typeof req.query.email === "string" && req.query.email) ||
-      (req.body && req.body.email) ||
-      null;
-
-    if (!customerId) {
-      return res.status(400).json({ error: "customerId required" });
-    }
-
-    const user = await getOrCreateUser({ id: customerId, email });
+    const user = await getOrCreateUser({ id, email });
 
     return res.status(200).json({
       ok: true,
       userId: user.id,
       email: user.email,
-      credits: user.credits,
+      credits: user.credits ?? 0,
+      freebieUsed: !!user.freebie_used,
     });
   } catch (err) {
-    console.error("credits handler error:", err);
+    console.error("credits API error:", err);
     return res
       .status(500)
-      .json({ error: err.message || "Unknown server error" });
+      .json({ error: err?.message || "Unknown server error" });
   }
 }
