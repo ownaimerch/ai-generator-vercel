@@ -12,7 +12,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 export const CREDIT_COSTS = {
   generate: 1,              // samo generowanie
-  "generate+remove_bg": 2,  // generowanie + remove.bg
+  "generate+remove_bg": 3,  // generowanie + remove.bg
 };
 
 const supabase =
