@@ -95,11 +95,12 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
-        // ---- USER + KREDYTY ----
+    // ---- USER + KREDYTY ----
     let creditsLeft = null;
 
+    const customer = body?.customer || null;
+
     if (customer && customer.id) {
-      // upewniamy się, że user istnieje w bazie
       try {
         creditsLeft = await chargeCredits({
           customer,
@@ -112,21 +113,17 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error("chargeCredits error:", err);
         if (err && err.code === "NOT_ENOUGH_CREDITS") {
-          return res.status(402).json({
-            error: "Not enough credits",
-            code: "NOT_ENOUGH_CREDITS",
-          });
+              return res.status(200).json({
+      ok: true,
+      aiId,
+      prompt,
+      imageUrl,
+      creditsLeft, // ← tu zwracamy ile zostało
+    });
         }
-        return res.status(500).json({
-          error: "Credits error",
-        });
-        return res.status(200).json({
-          ok: true,
-          aiId,
-          prompt,
-          imageUrl,
-          creditsLeft,   // <<< NOWE
-        });
+        return res
+          .status(500)
+          .json({ error: "Credits error" });
       }
     }
 
