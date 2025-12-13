@@ -96,21 +96,18 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
-    // ---- USER + KREDYTY ----
-    let effectiveCost =
-      removeBackground
-        ? CREDIT_COSTS.GENERATE_WITH_BG_REMOVE
-        : CREDIT_COSTS.GENERATE;
+        // ---- USER + KREDYTY ----
+    let creditsLeft = null;
 
     if (customer && customer.id) {
       // upewniamy się, że user istnieje w bazie
-      await getOrCreateUser(customer);
-
       try {
-        await chargeCredits({
+        creditsLeft = await chargeCredits({
           customer,
           type: removeBackground ? "generate+remove_bg" : "generate",
-          cost: effectiveCost,
+          cost: removeBackground
+            ? CREDIT_COSTS.GENERATE_WITH_BG_REMOVE
+            : CREDIT_COSTS.GENERATE,
           prompt,
         });
       } catch (err) {
