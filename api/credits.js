@@ -1,111 +1,184 @@
-// lib/credits.js
+// api/credits.js
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn("⚠️ Supabase env vars missing (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn(
+    "⚠️ Supabase env vars missing (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)"
+  );
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
-
-// Ile kosztuje co:
 export const CREDIT_COSTS = {
-  GENERATE: 1,        // zwykła generacja
-  REMOVE_BG_EXTRA: 1, // +1 jeśli removeBackground = true
+  generate: 1,              // samo generowanie
+  "generate+remove_bg": 2,  // generowanie + remove.bg
 };
 
-// 1) Pobierz lub stwórz usera z 1 darmowym kredytem
+const supabase =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      })
+    : null;
+
+// --- UŻYTKOWNIK ---
+
 export async function getOrCreateUser(customer) {
-  if (!customer || !customer.id) {
+  if (!supabase) throw new Error("Supabase not configured");
+  if (!customer || typeof customer.id === "undefined") {
     throw new Error("Missing customer.id");
   }
 
-  const userId = Number(customer.id);
+  const id = Number(customer.id);
+  const email = customer.email || null;
 
-  // spróbuj znaleźć
-  let { data, error } = await supabase
+  // Szukamy istniejącego usera
+  const { data, error } = await supabase
+    .from("ai_users")
+    .select("*")
+    .eq("id", id)
+    .limit(1);
+
+  if (error) {
+    console.error("Supabase select ai_users error:", error);
+    throw error;
+  }
+
+  if (data && data.length > 0) {
+    return data[0];
+  }
+
+  // Nowy user – 1 darmowy kredyt
+  const { data: inserted, error: insertError } = await supabase
+    .from("ai_users")
+    .insert({
+      id,
+      email,
+      credits: 1,
+    })
+    .select("*")
+    .single();
+
+  if (insertError) {
+    console.error("Supabase insert ai_users error:", insertError);
+    throw insertError;
+  }
+
+  return inserted;
+}
+
+// --- KREDYTY ---
+
+// Obsługujemy 2 warianty wywołania:
+// chargeCredits(userId, type, cost, prompt)
+// chargeCredits(userId, type, prompt)
+export async function chargeCredits(userId, type, costOrPrompt, maybePrompt) {
+  if (!supabase) throw new Error("Supabase not configured");
+
+  let cost;
+  let prompt;
+
+  if (typeof costOrPrompt === "number") {
+    cost = costOrPrompt;
+    prompt = maybePrompt || null;
+  } else {
+    cost = CREDIT_COSTS[type] ?? CREDIT_COSTS.generate;
+    prompt = costOrPrompt || null;
+  }
+
+  const { data: user, error: userError } = await supabase
     .from("ai_users")
     .select("*")
     .eq("id", userId)
     .single();
 
-  // PGRST116 = no rows
-  if (error && error.code !== "PGRST116") {
-    console.error("Supabase get user error:", error);
-    throw error;
+  if (userError) {
+    console.error("Supabase select ai_users error:", userError);
+    throw userError;
   }
 
-  if (!data) {
-    // nie ma – tworzymy z 1 darmowym kredytem
-    const { data: inserted, error: insErr } = await supabase
-      .from("ai_users")
-      .insert({
-        id: userId,
-        email: customer.email || null,
-        credits: 1, // FREEBIE = 1
-      })
-      .select("*")
-      .single();
-
-    if (insErr) {
-      console.error("Supabase insert user error:", insErr);
-      throw insErr;
-    }
-    data = inserted;
-  }
-
-  return data; // { id, email, credits, ... }
-}
-
-// 2) Obciąż kredyty po udanej generacji
-export async function chargeCredits(userId, cost, meta = {}) {
-  if (!userId) throw new Error("Missing userId");
-  if (!cost || cost <= 0) return;
-
-  userId = Number(userId);
-
-  // Pobierz aktualny stan
-  const { data: user, error: userErr } = await supabase
-    .from("ai_users")
-    .select("credits")
-    .eq("id", userId)
-    .single();
-
-  if (userErr) {
-    console.error("Supabase get credits error:", userErr);
-    throw userErr;
-  }
-
-  if (!user || user.credits < cost) {
-    const err = new Error("INSUFFICIENT_CREDITS");
-    err.code = "INSUFFICIENT_CREDITS";
+  if (!user || typeof user.credits !== "number" || user.credits < cost) {
+    const err = new Error("Not enough credits");
+    err.code = "NO_CREDITS";
+    err.creditsLeft = user ? user.credits : 0;
     throw err;
   }
 
   const newCredits = user.credits - cost;
 
-  // Update kredytów
-  const { error: updErr } = await supabase
+  const { error: updateError } = await supabase
     .from("ai_users")
-    .update({ credits: newCredits, updated_at: new Date().toISOString() })
+    .update({ credits: newCredits })
     .eq("id", userId);
 
-  if (updErr) {
-    console.error("Supabase update credits error:", updErr);
-    throw updErr;
+  if (updateError) {
+    console.error("Supabase update ai_users error:", updateError);
+    throw updateError;
   }
 
-  // Zaloguj użycie
-  await supabase.from("ai_usage").insert({
+  const { error: logError } = await supabase.from("ai_usage").insert({
     user_id: userId,
-    type: meta.type || "generate",
-    prompt: meta.prompt || null,
+    type,
     cost,
+    prompt: prompt || null,
   });
 
-  return { remaining: newCredits };
+  if (logError) {
+    console.error("Supabase insert ai_usage error:", logError);
+    // nie przerywamy – kredyty już zeszły
+  }
+
+  return { creditsLeft: newCredits };
+}
+
+// --- HTTP endpoint: GET /api/credits ---
+// użyjemy go z frontendu do pokazania licznika
+export default async function handler(req, res) {
+  // CORS – pozwalamy na wywołanie z ownaimerch.com
+  res.setHeader("Access-Control-Allow-Origin", "https://ownaimerch.com");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Use GET" });
+  }
+
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: "Supabase not configured" });
+    }
+
+    const customerId =
+      Number(req.query.customerId) ||
+      Number(req.body && req.body.customerId);
+
+    const email =
+      (typeof req.query.email === "string" && req.query.email) ||
+      (req.body && req.body.email) ||
+      null;
+
+    if (!customerId) {
+      return res.status(400).json({ error: "customerId required" });
+    }
+
+    const user = await getOrCreateUser({ id: customerId, email });
+
+    return res.status(200).json({
+      ok: true,
+      userId: user.id,
+      email: user.email,
+      credits: user.credits,
+    });
+  } catch (err) {
+    console.error("credits handler error:", err);
+    return res
+      .status(500)
+      .json({ error: err.message || "Unknown server error" });
+  }
 }
