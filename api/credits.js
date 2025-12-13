@@ -22,7 +22,38 @@ export const CREDIT_COSTS = {
   GENERATE_WITH_BG_REMOVE: 3, // generacja + remove.bg
 };
 
-// ---------------- HELPERY DLA GENERATE-IMAGE ----------------
+// ---------------- POMOCNICZE: pobieranie usera ----------------
+
+async function loadUserById(id) {
+  if (!supabase) {
+    throw new Error("Supabase not configured");
+  }
+
+  const { data, error } = await supabase
+    .from("ai_users")
+    .select("*")
+    .eq("id", id)
+    .limit(1)
+    .single(); // zwraca { data, error }
+
+  if (error) {
+    // brak rekordu: traktujemy jako "user nie istnieje"
+    if (
+      error.code === "PGRST116" ||
+      (typeof error.message === "string" &&
+        error.message.toLowerCase().includes("0 rows"))
+    ) {
+      return null;
+    }
+
+    console.error("Supabase loadUserById error:", error);
+    throw error;
+  }
+
+  return data;
+}
+
+// ---------------- EXPORT DLA generate-image-v3 ----------------
 
 export async function getOrCreateUser(customer) {
   if (!supabase) {
@@ -35,27 +66,11 @@ export async function getOrCreateUser(customer) {
   const id = Number(customer.id);
   const email = customer.email || null;
 
-  // spróbuj znaleźć istniejącego
-  const { data, error } = await supabase
-    .from("ai_users")
-    .select("*")
-    .eq("id", id)
-    .limit(1)
-    .single()
-    .catch((e) => {
-      // supabase-js czasem rzuca przy single() gdy brak rekordu
-      if (e?.code === "PGRST116") return { data: null, error: null };
-      throw e;
-    });
+  // 1) spróbuj pobrać istniejącego
+  const existing = await loadUserById(id);
+  if (existing) return existing;
 
-  if (error) {
-    console.error("Supabase get user error:", error);
-    throw error;
-  }
-
-  if (data) return data;
-
-  // brak – zakładamy nowy rekord z freebie_unused
+  // 2) jeśli nie ma – tworzymy nowego z freebie_used = false
   const { data: inserted, error: insertError } = await supabase
     .from("ai_users")
     .insert({
@@ -85,17 +100,10 @@ export async function chargeCredits({ customer, type, cost, prompt }) {
 
   const id = Number(customer.id);
 
-  // bierzemy aktualny stan usera
-  const { data: user, error: selError } = await supabase
-    .from("ai_users")
-    .select("*")
-    .eq("id", id)
-    .limit(1)
-    .single();
-
-  if (selError) {
-    console.error("Supabase select user error:", selError);
-    throw selError;
+  // bierzemy aktualny stan
+  const user = await loadUserById(id);
+  if (!user) {
+    throw new Error("User not found in ai_users");
   }
 
   let credits = user.credits ?? 0;
@@ -104,13 +112,12 @@ export async function chargeCredits({ customer, type, cost, prompt }) {
   let finalCost = cost;
   let usedFreebieNow = false;
 
-  // freebie: jeśli jeszcze NIE użyta i brak kredytów → ta generacja za 0
+  // freebie: jeśli jeszcze NIE użyta i nie masz kredytów → ta generacja za darmo
   if (!freebie_used && credits === 0) {
     finalCost = 0;
     usedFreebieNow = true;
   }
 
-  // jeśli jednak trzeba pobrać kredyty i nie starcza
   if (finalCost > 0 && credits < finalCost) {
     const err = new Error("Not enough credits");
     err.code = "NOT_ENOUGH_CREDITS";
@@ -135,7 +142,7 @@ export async function chargeCredits({ customer, type, cost, prompt }) {
     throw updError;
   }
 
-  // log użycia (nie musi blokować odpowiedzi)
+  // log użycia – fire & forget
   try {
     await supabase.from("ai_usage").insert({
       user_id: id,
@@ -153,7 +160,7 @@ export async function chargeCredits({ customer, type, cost, prompt }) {
 // ---------------- API ENDPOINT: GET /api/credits ----------------
 
 export default async function handler(req, res) {
-  // CORS (dla frontu z ownaimerch.com)
+  // CORS tylko dla Twojej domeny sklepu
   res.setHeader("Access-Control-Allow-Origin", "https://ownaimerch.com");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -171,7 +178,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Supabase not configured" });
   }
 
-  // obsługujemy kilka nazw parametru na wszelki wypadek
   const rawId =
     (req.query.customer_id ||
       req.query.customerId ||
@@ -193,25 +199,25 @@ export default async function handler(req, res) {
       .select("id, credits, freebie_used")
       .eq("id", id)
       .limit(1)
-      .single()
-      .catch((e) => {
-        if (e?.code === "PGRST116") return { data: null, error: null };
-        throw e;
-      });
+      .single();
 
     if (error) {
+      // brak rekordu → domyślne wartości
+      if (
+        error.code === "PGRST116" ||
+        (typeof error.message === "string" &&
+          error.message.toLowerCase().includes("0 rows"))
+      ) {
+        return res.status(200).json({
+          ok: true,
+          credits: 0,
+          freebie_used: false,
+          freebie_available: true,
+        });
+      }
+
       console.error("Supabase credits select error:", error);
       return res.status(500).json({ error: "Database error" });
-    }
-
-    if (!data) {
-      // użytkownik jeszcze nic nie robił → 0 kredytów, freebie dostępne
-      return res.status(200).json({
-        ok: true,
-        credits: 0,
-        freebie_used: false,
-        freebie_available: true,
-      });
     }
 
     return res.status(200).json({
