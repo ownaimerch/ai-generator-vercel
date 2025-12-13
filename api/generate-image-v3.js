@@ -1,14 +1,16 @@
 // api/generate-image-v3.js
 import OpenAI from "openai";
-import { getOrCreateUser, chargeCredits, CREDIT_COSTS } from "./credits.js";
+import {
+  getOrCreateUser,
+  chargeCredits,
+  CREDIT_COSTS,
+} from "./credits.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
 const REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY;
 
-/**
- * Usuwanie tła przez remove.bg – zwraca base64 PNG
- */
+// --- remove.bg helper ---
 async function maybeRemoveBackground(b64, removeBackground) {
   if (!removeBackground) return b64;
 
@@ -19,9 +21,9 @@ async function maybeRemoveBackground(b64, removeBackground) {
 
   try {
     const params = new URLSearchParams();
-    params.append("image_file_b64", b64); // sama base64
+    params.append("image_file_b64", b64); // surowa base64
     params.append("size", "auto");
-    params.append("format", "png");
+    params.append("format", "png"); // PNG z alfą
 
     const resp = await fetch("https://api.remove.bg/v1.0/removebg", {
       method: "POST",
@@ -33,8 +35,14 @@ async function maybeRemoveBackground(b64, removeBackground) {
 
     if (!resp.ok) {
       const errText = await resp.text();
-      console.error("❌ remove.bg error:", resp.status, resp.statusText, errText);
-      return b64; // w razie błędu wolimy mieć obraz z tłem niż żaden
+      console.error(
+        "❌ remove.bg error:",
+        resp.status,
+        resp.statusText,
+        errText
+      );
+      // jak się wywali – lepiej mieć obraz z tłem niż żaden
+      return b64;
     }
 
     const arrayBuffer = await resp.arrayBuffer();
@@ -49,12 +57,15 @@ async function maybeRemoveBackground(b64, removeBackground) {
 }
 
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS – tylko Twój sklep
+  res.setHeader("Access-Control-Allow-Origin", "https://ownaimerch.com");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Max-Age", "86400");
-  if (req.method === "OPTIONS") return res.status(204).end();
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Use POST" });
@@ -72,14 +83,10 @@ export default async function handler(req, res) {
 
     const prompt = (body?.prompt || "").trim();
     const removeBackground = !!body?.removeBackground;
-    const customer = body?.customer || null; // { id, email } – z frontu
+    const customer = body?.customer || null;
 
     if (!prompt || prompt.length < 3) {
       return res.status(400).json({ error: "Prompt too short." });
-    }
-
-    if (!customer || !customer.id) {
-      return res.status(401).json({ error: "Login required." });
     }
 
     if (!PRINTIFY_API_KEY) {
@@ -89,25 +96,38 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
-    // 1) User + kredyty
-    const user = await getOrCreateUser(customer);
+    // ---- USER + KREDYTY ----
+    let effectiveCost =
+      removeBackground
+        ? CREDIT_COSTS.GENERATE_WITH_BG_REMOVE
+        : CREDIT_COSTS.GENERATE;
 
-    // ile kredytów potrzeba
-    let cost = CREDIT_COSTS.GENERATE;
-    if (removeBackground) {
-      cost += CREDIT_COSTS.REMOVE_BG_EXTRA;
+    if (customer && customer.id) {
+      // upewniamy się, że user istnieje w bazie
+      await getOrCreateUser(customer);
+
+      try {
+        await chargeCredits({
+          customer,
+          type: removeBackground ? "generate+remove_bg" : "generate",
+          cost: effectiveCost,
+          prompt,
+        });
+      } catch (err) {
+        console.error("chargeCredits error:", err);
+        if (err && err.code === "NOT_ENOUGH_CREDITS") {
+          return res.status(402).json({
+            error: "Not enough credits",
+            code: "NOT_ENOUGH_CREDITS",
+          });
+        }
+        return res.status(500).json({
+          error: "Credits error",
+        });
+      }
     }
 
-    if ((user.credits || 0) < cost) {
-      return res.status(402).json({
-        error: "INSUFFICIENT_CREDITS",
-        message: "Not enough credits. Please buy a package.",
-        credits: user.credits || 0,
-        needed: cost,
-      });
-    }
-
-    // 2) Generowanie obrazu w OpenAI
+    // ---- 1) generowanie obrazu DALL·E 3 ----
     const dalle = await openai.images.generate({
       model: "dall-e-3",
       prompt,
@@ -121,13 +141,13 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No image returned from OpenAI" });
     }
 
-    // 3) Opcjonalne usuwanie tła przez remove.bg
+    // ---- 2) opcjonalne usunięcie tła ----
     b64 = await maybeRemoveBackground(b64, removeBackground);
 
-    // 4) Upload do Printify
+    // ---- 3) upload do Printify ----
     const uploadBody = {
       file_name: `ai-${Date.now()}.png`,
-      contents: b64, // sama base64
+      contents: b64,
     };
 
     const printifyResponse = await fetch(
@@ -165,29 +185,15 @@ export default async function handler(req, res) {
     const aiId =
       "ai-" + Date.now() + "-" + Math.random().toString(36).slice(2);
 
-    // 5) Dopiero TERAZ zdejmujemy kredyty (bo generacja się udała)
-    try {
-      await chargeCredits(user.id, cost, {
-        type: removeBackground ? "generate+remove_bg" : "generate",
-        prompt,
-      });
-    } catch (creditErr) {
-      // jak coś pójdzie nie tak – logujemy, ale klient dostaje obraz
-      console.error("❌ chargeCredits error:", creditErr);
-    }
-
+    // ---- 4) zwrot do frontu ----
     return res.status(200).json({
       ok: true,
       aiId,
       prompt,
       imageUrl,
-      cost,
     });
   } catch (err) {
     console.error("❌ generate-image-v3 error:", err);
-    if (err.code === "INSUFFICIENT_CREDITS") {
-      return res.status(402).json({ error: "INSUFFICIENT_CREDITS" });
-    }
     return res
       .status(500)
       .json({ error: err?.message || "Unknown server error" });
