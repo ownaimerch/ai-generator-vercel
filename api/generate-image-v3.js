@@ -2,8 +2,8 @@
 import OpenAI from "openai";
 import {
   chargeCredits,
-  CREDIT_COSTS,
-} from "./credits-core.js";
+  CREDIT_COSTS
+} from "./credits.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
@@ -20,16 +20,16 @@ async function maybeRemoveBackground(b64, removeBackground) {
 
   try {
     const params = new URLSearchParams();
-    params.append("image_file_b64", b64); // surowa base64
+    params.append("image_file_b64", b64);
     params.append("size", "auto");
-    params.append("format", "png"); // PNG z alfą
+    params.append("format", "png");
 
     const resp = await fetch("https://api.remove.bg/v1.0/removebg", {
       method: "POST",
       headers: {
-        "X-Api-Key": REMOVEBG_API_KEY,
+        "X-Api-Key": REMOVEBG_API_KEY
       },
-      body: params,
+      body: params
     });
 
     if (!resp.ok) {
@@ -40,7 +40,6 @@ async function maybeRemoveBackground(b64, removeBackground) {
         resp.statusText,
         errText
       );
-      // jak się wywali – lepiej mieć obraz z tłem niż żaden
       return b64;
     }
 
@@ -56,8 +55,8 @@ async function maybeRemoveBackground(b64, removeBackground) {
 }
 
 export default async function handler(req, res) {
-  // CORS – tylko Twój sklep
-  res.setHeader("Access-Control-Allow-Origin", "https://ownaimerch.com");
+  // CORS – szeroko, żeby nie było błędów z przeglądarki
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Max-Age", "86400");
@@ -95,10 +94,8 @@ export default async function handler(req, res) {
         .json({ error: "Server misconfigured: no PRINTIFY_API_TOKEN" });
     }
 
-    // ---- USER + KREDYTY ----
+    // ---- KREDYTY ----
     let creditsLeft = null;
-
-    const customer = body?.customer || null;
 
     if (customer && customer.id) {
       try {
@@ -108,22 +105,19 @@ export default async function handler(req, res) {
           cost: removeBackground
             ? CREDIT_COSTS.GENERATE_WITH_BG_REMOVE
             : CREDIT_COSTS.GENERATE,
-          prompt,
+          prompt
         });
       } catch (err) {
         console.error("chargeCredits error:", err);
         if (err && err.code === "NOT_ENOUGH_CREDITS") {
-              return res.status(200).json({
-      ok: true,
-      aiId,
-      prompt,
-      imageUrl,
-      creditsLeft, // ← tu zwracamy ile zostało
-    });
+          return res.status(402).json({
+            error: "Not enough credits",
+            code: "NOT_ENOUGH_CREDITS"
+          });
         }
-        return res
-          .status(500)
-          .json({ error: "Credits error" });
+        return res.status(500).json({
+          error: "Credits error"
+        });
       }
     }
 
@@ -132,7 +126,7 @@ export default async function handler(req, res) {
       model: "dall-e-3",
       prompt,
       size: "1024x1024",
-      response_format: "b64_json",
+      response_format: "b64_json"
     });
 
     let b64 = dalle?.data?.[0]?.b64_json;
@@ -147,7 +141,7 @@ export default async function handler(req, res) {
     // ---- 3) upload do Printify ----
     const uploadBody = {
       file_name: `ai-${Date.now()}.png`,
-      contents: b64,
+      contents: b64
     };
 
     const printifyResponse = await fetch(
@@ -156,9 +150,9 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           Authorization: `Bearer ${PRINTIFY_API_KEY}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify(uploadBody),
+        body: JSON.stringify(uploadBody)
       }
     );
 
@@ -168,7 +162,7 @@ export default async function handler(req, res) {
       console.error("❌ Printify upload error:", printifyJson);
       return res.status(500).json({
         error: "Printify upload failed",
-        details: printifyJson,
+        details: printifyJson
       });
     }
 
@@ -191,6 +185,7 @@ export default async function handler(req, res) {
       aiId,
       prompt,
       imageUrl,
+      creditsLeft
     });
   } catch (err) {
     console.error("❌ generate-image-v3 error:", err);
