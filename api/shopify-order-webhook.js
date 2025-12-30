@@ -2,8 +2,8 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.https://vefxbqjddlgzxwqntkhw.supabase.co;
+const supabaseKey = process.env.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlZnhicWpkZGxnenh3cW50a2h3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDk4Mjk5NCwiZXhwIjoyMDgwNTU4OTk0fQ.8VtAtETKHMs6aX9oRhvkvsK7KlJ0MiGZQyp4MpY75kk;
 const shopifySecret = process.env.b9ca96da492a7c0de200e522bf198deb7ae11c20b8ced21515c84a0000e6d97c || "";
 
 const supabase = createClient(supabaseUrl, supabaseKey);
