@@ -1,187 +1,181 @@
 // api/shopify-order-webhook.js
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
-const PRINTIFY_API_KEY = process.env.PRINTIFY_API_TOKEN;
-const PRINTIFY_SHOP_ID = process.env.PRINTIFY_SHOP_ID;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const shopifySecret = process.env.SHOPIFY_WEBHOOK_SECRET || "";
 
-const PRINT_PROVIDER_ID = Number(process.env.PRINTIFY_PROVIDER_ID || "99");
-const BLUEPRINT_ID      = Number(process.env.PRINTIFY_BLUEPRINT_ID || "706");
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Domyślny wariant, jeśli nie znajdziemy w mapie (np. White / L)
-const DEFAULT_VARIANT_ID = Number(process.env.PRINTIFY_VARIANT_ID || "73207");
-
-// MAPA: dokładnie takie stringi, jak w Shopify w "variant_title"
-const VARIANT_MAP = {
-  "White / S": 73199,
-  "White / M": 73203,
-  "White / L": 73207,
-  "White / XL": 73211,
-
-  "Black / S": 73196,
-  "Black / M": 73200,
-  "Black / L": 73204,
-  "Black / XL": 73208,
+// Ile kredytów dają konkretne pakiety
+const PACK_CREDITS = {
+  "Mini Design": 2,
+  "Mini Clean Logo": 3,
+  Starter: 20,
+  Creator: 80,
+  "Pro / Studio": 250,
 };
 
-// ID produktów w Shopify – do rozróżnienia front / back
-const AI_FRONT_PRODUCT_ID = process.env.AI_FRONT_PRODUCT_ID || "";
-const AI_BACK_PRODUCT_ID  = process.env.AI_BACK_PRODUCT_ID  || "";
+function verifyShopifyHmac(req, rawBody) {
+  if (!shopifySecret) return true; // jak nie ma secreta, nie blokujemy (dev)
+  const hmacHeader = req.headers["x-shopify-hmac-sha256"];
+  if (!hmacHeader) return false;
+
+  const digest = crypto
+    .createHmac("sha256", shopifySecret)
+    .update(rawBody, "utf8")
+    .digest("base64");
+
+  return crypto.timingSafeEqual(
+    Buffer.from(digest, "utf8"),
+    Buffer.from(hmacHeader, "utf8")
+  );
+}
+
+export const config = {
+  api: {
+    bodyParser: false, // sami parsujemy JSON żeby mieć surowe body do HMAC
+  },
+};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).send("Method not allowed");
   }
 
-  if (!PRINTIFY_API_KEY || !PRINTIFY_SHOP_ID) {
-    console.error("Missing PRINTIFY_API_KEY or PRINTIFY_SHOP_ID env vars");
-    return res.status(500).json({
-      error: "Server misconfigured",
-    });
-  }
+  // 1) wczytujemy raw body
+  let rawBody = "";
+  req.on("data", (chunk) => {
+    rawBody += chunk;
+  });
 
-  let order = req.body;
-  if (!order || typeof order !== "object") {
+  req.on("end", async () => {
     try {
-      order = JSON.parse(req.body);
-    } catch {
-      console.error("Cannot parse Shopify webhook body");
-      return res.status(400).json({ error: "Invalid JSON" });
-    }
-  }
-
-  console.log("📦 Shopify order webhook:", JSON.stringify(order, null, 2));
-
-  const aiLineItems = [];
-
-  // --- BUDUJEMY LINE ITEMS DLA PRINTIFY ---
-  for (const item of order.line_items || []) {
-    // Zbierz properties (ai_id, ai_image_url, ai_prompt...)
-    const props = {};
-    for (const p of item.properties || []) {
-      if (p.name && p.value) {
-        props[p.name] = p.value;
+      // 2) weryfikacja HMAC (opcjonalnie w dev)
+      if (!verifyShopifyHmac(req, rawBody)) {
+        console.error("❌ Shopify webhook HMAC verification failed");
+        return res.status(401).send("Invalid HMAC");
       }
-    }
 
-    if (!props.ai_id || !props.ai_image_url) {
-      continue;
-    }
+      const order = JSON.parse(rawBody || "{}");
+      console.log("🧾 [AI credits] incoming order", order.id);
 
-    const variantKey = (item.variant_title || "").trim();
-    const variantId = VARIANT_MAP[variantKey] || DEFAULT_VARIANT_ID;
-
-    const productIdStr = String(item.product_id || "");
-    const isBackProduct =
-      AI_BACK_PRODUCT_ID &&
-      productIdStr === String(AI_BACK_PRODUCT_ID);
-
-    // 🔍 DEBUG: zobaczmy co tu się dzieje
-    console.log("🧵 LINE ITEM DEBUG", {
-      title: item.title,
-      product_id: item.product_id,
-      variant_title: item.variant_title,
-      props,
-      AI_BACK_PRODUCT_ID,
-      AI_FRONT_PRODUCT_ID,
-      isBackProduct,
-    });
-
-      const printAreas = isBackProduct
-    ? {
-        // PLECY – większe i wyżej
-        back: [
-          {
-            src: props.ai_image_url,
-            scale: 0.70, // większy nadruk na plecach
-            x: 0.5,
-            y: 0.35,    // wyżej na plecach (mniejsza wartość = wyżej)
-            angle: 0,
-          },
-        ],
+      if (!order || !order.id) {
+        return res.status(400).json({ error: "No order payload" });
       }
-    : {
-        // PRZÓD – zostaje jak było
-        front: [
-          {
-            src: props.ai_image_url,
-            scale: 0.55,
-            x: 0.5,
-            y: 0.42,
-            angle: 0,
-          },
-        ],
-      };
 
-    aiLineItems.push({
-      print_provider_id: PRINT_PROVIDER_ID,
-      blueprint_id: BLUEPRINT_ID,
-      variant_id: variantId,
-      quantity: item.quantity || 1,
-      external_id: props.ai_id,
-      print_areas: printAreas,
-    });
-  }
+      // 3) tylko opłacone zamówienia
+      const financialStatus = order.financial_status || order.payment_status;
+      if (financialStatus !== "paid") {
+        console.log(
+          "[AI credits] order not paid yet, status=",
+          financialStatus
+        );
+        return res
+          .status(200)
+          .json({ ok: true, skipped: "not_paid", status: financialStatus });
+      }
 
-  if (!aiLineItems.length) {
-    console.log("No AI items in this order – nothing to send to Printify.");
-    return res.status(200).json({ ok: true, message: "No AI items" });
-  }
+      if (!order.customer || !order.customer.id) {
+        console.log("[AI credits] order has no customer, skipping");
+        return res
+          .status(200)
+          .json({ ok: true, skipped: "no_customer", orderId: order.id });
+      }
 
-  const shipping = order.shipping_address || {};
-  const customer = order.customer || {};
+      const userId = order.customer.id;
+      const email = order.email || order.customer.email || null;
 
-  const address_to = {
-    first_name: shipping.first_name || customer.first_name || "AI",
-    last_name: shipping.last_name || customer.last_name || "Customer",
-    email: order.email || customer.email || "test@example.com",
-    phone: shipping.phone || customer.phone || "000000000",
-    country: shipping.country_code || shipping.country || "US",
-    region: shipping.province_code || shipping.province || "",
-    address1: shipping.address1 || "",
-    address2: shipping.address2 || "",
-    city: shipping.city || "",
-    zip: shipping.zip || "",
-  };
+      // 4) zliczamy kredyty z line_items
+      let totalCreditsToAdd = 0;
 
-  const printifyOrderBody = {
-    external_id: `shopify-${order.id || order.name || Date.now()}`,
-    label: order.name || `Shopify order ${order.id || ""}`,
-    line_items: aiLineItems,
-    shipping_method: 1,
-    is_printify_express: false,
-    is_economy_shipping: false,
-    send_shipping_notification: false,
-    address_to,
-  };
+      for (const item of order.line_items || []) {
+        let packName = null;
 
-  try {
-    const resp = await fetch(
-      `https://api.printify.com/v1/shops/${PRINTIFY_SHOP_ID}/orders.json`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${PRINTIFY_API_KEY}`,
-          "Content-Type": "application/json",
+        // szukamy properties[_ai_credits_pack]
+        if (Array.isArray(item.properties) && item.properties.length > 0) {
+          const p = item.properties.find(
+            (prop) => prop && prop.name === "_ai_credits_pack"
+          );
+          if (p && p.value) {
+            packName = p.value.trim();
+          }
+        }
+
+        // fallback na tytuł produktu
+        if (!packName) {
+          packName = (item.title || "").trim();
+        }
+
+        const perUnit = PACK_CREDITS[packName];
+        if (!perUnit) continue;
+
+        const qty = item.quantity || 1;
+        totalCreditsToAdd += perUnit * qty;
+      }
+
+      if (!totalCreditsToAdd) {
+        console.log("[AI credits] no AI credit packs on order", order.id);
+        return res
+          .status(200)
+          .json({ ok: true, skipped: "no_packs", orderId: order.id });
+      }
+
+      console.log(
+        `[AI credits] adding ${totalCreditsToAdd} credits for user ${userId}`
+      );
+
+      // 5) pobieramy aktualne kredyty
+      const { data: existing, error: selectErr } = await supabase
+        .from("ai_users")
+        .select("credits")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (selectErr && selectErr.code !== "PGRST116") {
+        console.error("❌ ai_users select error", selectErr);
+        return res.status(500).json({ error: "db_select_error" });
+      }
+
+      const currentCredits = existing?.credits ?? 0;
+      const newCredits = currentCredits + totalCreditsToAdd;
+
+      // 6) upsert użytkownika z nową liczbą kredytów
+      const { error: upsertErr } = await supabase.from("ai_users").upsert(
+        {
+          id: userId,
+          email,
+          credits: newCredits,
         },
-        body: JSON.stringify(printifyOrderBody),
+        { onConflict: "id" }
+      );
+
+      if (upsertErr) {
+        console.error("❌ ai_users upsert error", upsertErr);
+        return res.status(500).json({ error: "db_upsert_error" });
       }
-    );
 
-    const data = await resp.json();
+      // 7) log do ai_usage (opcjonalne)
+      await supabase.from("ai_usage").insert({
+        user_id: userId,
+        type: "pack_purchase",
+        prompt: `Order ${order.name || order.id}`,
+        cost: -totalCreditsToAdd, // ujemny -> dodaliśmy tyle kredytów
+      });
 
-    if (!resp.ok) {
-      console.error("❌ Printify order error:", data);
+      console.log(
+        `[AI credits] credits updated -> ${newCredits} for user ${userId}`
+      );
+
+      return res
+        .status(200)
+        .json({ ok: true, userId, added: totalCreditsToAdd, credits: newCredits });
+    } catch (err) {
+      console.error("❌ shopify-order-webhook error", err);
       return res
         .status(500)
-        .json({ ok: false, error: "Printify order failed", details: data });
+        .json({ error: err?.message || "Unknown webhook error" });
     }
-
-    console.log("✅ Printify order created:", data.id || data);
-    return res.status(200).json({ ok: true, printify: data });
-  } catch (err) {
-    console.error("❌ shopify-order-webhook error:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err?.message || "Unknown error",
-    });
-  }
+  });
 }
