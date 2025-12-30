@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const shopifySecret = process.env.SHOPIFY_WEBHOOK_SECRET || "";
+const shopifySecret = process.env.b9ca96da492a7c0de200e522bf198deb7ae11c20b8ced21515c84a0000e6d97c || "";
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
