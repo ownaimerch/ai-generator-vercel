@@ -3,6 +3,7 @@ import sharp from "sharp";
 
 // 1. URL-e bazowych mockupów z Shopify Files
 const BASE_IMAGES = {
+ // T-Shirt
   "white-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
   "white-back":
@@ -11,6 +12,11 @@ const BASE_IMAGES = {
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_front.png?v=1764000531",
   "black-back":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",
+
+  // HOODIE – FRONT
+  "navy_front":   "https://cdn.../hoodie-true-navy-front.png",
+  "pepper_front": "https://cdn.../hoodie-pepper-front.png",
+  "white_front_hoodie": "https://cdn.../hoodie-white-front.png"
 };
 
 // 2. Pola nadruku w PROCENTACH (0–1) względem całego obrazka
