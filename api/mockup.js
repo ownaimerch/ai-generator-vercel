@@ -5,18 +5,23 @@ import sharp from "sharp";
 const BASE_IMAGES = {
  // T-Shirt
   "white-front":
-    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_front.png?v=1764000531",
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/white_back.jpg?v=1767378513",
   "white-back":
-    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_white_back.png?v=1764000460",
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/white_back.jpg?v=1767378513",
   "black-front":
-    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_front.png?v=1764000531",
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/black_back.jpg?v=1767378502",
   "black-back":
-    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/mockup_black_back.png?v=1764000459",
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/black_back.jpg?v=1767378502",
 
   // HOODIE – FRONT
-  "navy_front":   "https://cdn.../hoodie-true-navy-front.png",
-  "pepper_front": "https://cdn.../hoodie-pepper-front.png",
-  "white_front_hoodie": "https://cdn.../hoodie-white-front.png"
+  "navy_front":   "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
+  "pepper_front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
+  "white_front_hoodie": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
+
+ // HOODIE – BACK
+  "navy_back":   "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
+  "pepper_back": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
+  "white_back": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
 };
 
 // 2. Pola nadruku w PROCENTACH (0–1) względem całego obrazka
