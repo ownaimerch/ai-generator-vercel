@@ -34,6 +34,10 @@ const PRINT_AREAS_NORM = {
   // BACK = lewa koszulka
   "white-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
   "black-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+
+ // FRONT HOODIE
+  "white-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+  "black-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
 };
 
 export default async function handler(req, res) {
