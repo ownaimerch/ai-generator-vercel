@@ -3,7 +3,7 @@ import sharp from "sharp";
 
 // 1. URL-e bazowych mockupów z Shopify Files
 const BASE_IMAGES = {
- // T-Shirt
+  // T-Shirt FRONT/BACK
   "white-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/white_back.jpg?v=1767378513",
   "white-back":
@@ -13,7 +13,7 @@ const BASE_IMAGES = {
   "black-back":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/black_back.jpg?v=1767378502",
 
-    // --- HOODIE – FRONT (kolory: white, true navy, pepper)
+  // --- HOODIE – FRONT (white, true navy, pepper)
   "navy-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
   "pepper-front":
@@ -21,10 +21,13 @@ const BASE_IMAGES = {
   "hoodie-white-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
 
- // HOODIE – BACK
-  "hoodie_mockup_navy_back":   "",
-  "hoodie_mockup_peper_back": "",
-  "hoodie_mockup_white_back": "",
+  // --- HOODIE – BACK (white, true navy, pepper)
+  "navy-back":
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_mockup_navy_back.png?v=1767464964",
+  "pepper-back":
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_mockup_peper_back.png?v=1767465023",
+  "hoodie-white-back":
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_mockup_white_back.png?v=1767464927",
 };
 
 // 2. Pola nadruku w PROCENTACH (0–1) względem całego obrazka
@@ -42,6 +45,11 @@ const PRINT_AREAS_NORM = {
   "navy-front":          { x: 0.256, y: 0.345, w: 0.13, h: 0.2 },
   "pepper-front":        { x: 0.256, y: 0.345, w: 0.13, h: 0.2 },
   "hoodie-white-front":  { x: 0.256, y: 0.345, w: 0.13, h: 0.2 },
+
+ // BACK HOODIE – na razie ten sam box, możesz potem dopieścić
+  "navy-back":          { x: 0.575, y: 0.345, w: 0.14, h: 0.215 },
+  "pepper-back":        { x: 0.575, y: 0.345, w: 0.14, h: 0.215 },
+  "hoodie-white-back":  { x: 0.575, y: 0.345, w: 0.14, h: 0.215 },
 };
 
 export default async function handler(req, res) {
