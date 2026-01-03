@@ -39,9 +39,9 @@ const PRINT_AREAS_NORM = {
   "black-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
 
    // FRONT HOODIE
-  "navy-front":          { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
-  "pepper-front":        { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
-  "hoodie-white-front":  { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+  "navy-front":          { x: 0.23, y: 0.3, w: 0.13, h: 0.2 },
+  "pepper-front":        { x: 0.23, y: 0.3, w: 0.13, h: 0.2 },
+  "hoodie-white-front":  { x: 0.23, y: 0.3, w: 0.13, h: 0.2 },
 };
 
 export default async function handler(req, res) {
