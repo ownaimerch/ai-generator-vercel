@@ -18,7 +18,7 @@ const BASE_IMAGES = {
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
   "pepper-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
-  "white-front-hoodie":
+  "hoodie-white-front":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
 
  // HOODIE – BACK
@@ -41,7 +41,7 @@ const PRINT_AREAS_NORM = {
    // FRONT HOODIE
   "navy-front":          { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
   "pepper-front":        { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
-  "white-front-hoodie":  { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+  "hoodie-white-front":  { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
 };
 
 export default async function handler(req, res) {
