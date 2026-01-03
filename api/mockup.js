@@ -16,12 +16,12 @@ const BASE_IMAGES = {
   // HOODIE – FRONT
   "navy_front":   "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
   "pepper_front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
-  "white_front_hoodie": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
+  "white_front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
 
  // HOODIE – BACK
-  "navy_back":   "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
-  "pepper_back": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
-  "white_back": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
+  "navy_back":   "",
+  "pepper_back": "",
+  "white_back": "",
 };
 
 // 2. Pola nadruku w PROCENTACH (0–1) względem całego obrazka
