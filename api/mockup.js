@@ -47,9 +47,9 @@ const PRINT_AREAS_NORM = {
   "hoodie-white-front":  { x: 0.256, y: 0.345, w: 0.13, h: 0.2 },
 
  // BACK HOODIE – na razie ten sam box, możesz potem dopieścić
-  "navy-back":          { x: 0.575, y: 0.345, w: 0.14, h: 0.215 },
-  "pepper-back":        { x: 0.575, y: 0.345, w: 0.14, h: 0.215 },
-  "hoodie-white-back":  { x: 0.575, y: 0.345, w: 0.14, h: 0.215 },
+  "navy-back":          { x: 0.65, y: 0.345, w: 0.14, h: 0.215 },
+  "pepper-back":        { x: 0.65, y: 0.345, w: 0.14, h: 0.215 },
+  "hoodie-white-back":  { x: 0.65, y: 0.345, w: 0.14, h: 0.215 },
 };
 
 export default async function handler(req, res) {
