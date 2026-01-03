@@ -13,10 +13,13 @@ const BASE_IMAGES = {
   "black-back":
     "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/black_back.jpg?v=1767378502",
 
-  // HOODIE – FRONT
-  "hoodie_mockup_navy_front":   "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
-  "hoodie_mockup_peper_front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
-  "hoodie_mockup_white_front": "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
+    // --- HOODIE – FRONT (kolory: white, true navy, pepper)
+  "navy-front":
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_navy.png?v=1767378497",
+  "pepper-front":
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_peper.png?v=1767378496",
+  "white-front-hoodie":
+    "https://cdn.shopify.com/s/files/1/0955/5594/4777/files/hoodie_white.png?v=1767378499",
 
  // HOODIE – BACK
   "hoodie_mockup_navy_back":   "",
@@ -35,10 +38,10 @@ const PRINT_AREAS_NORM = {
   "white-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
   "black-back": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
 
- // FRONT HOODIE
-  "hoodie_mockup_white_front": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
-  "hoodie_mockup_navy_front": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
-  "hoodie_mockup_peper_front": { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+   // FRONT HOODIE
+  "navy-front":          { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+  "pepper-front":        { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
+  "white-front-hoodie":  { x: 0.278, y: 0.32, w: 0.14, h: 0.215 },
 };
 
 export default async function handler(req, res) {
